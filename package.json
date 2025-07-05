@@ -3,7 +3,8 @@
   "packageManager": "yarn@4.9.1",
   "scripts": {
     "start": "ts-node src/server.ts",
-    "dev": "ts-node src/server.ts"
+    "dev": "ts-node src/server.ts",
+    "migrate": "ts-node src/utils/migration_runner.ts"
   },
   "dependencies": {
     "@sqlitecloud/drivers": "^1.0.507",

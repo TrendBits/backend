@@ -1,4 +1,4 @@
-const { getDatabase: getDbInstance } = require("../configs/database");
+import { getDatabase } from "../configs/database";
 
 // database input sanitization
 const sanitizeInput = (input) => {
@@ -14,7 +14,7 @@ const sanitizeInput = (input) => {
 // database query wrapper
 const safeQuery = async (queryFunction) => {
   try {
-    const db = getDbInstance();
+    const db = getDatabase();
     return await queryFunction(db);
   } catch (error) {
     console.error("Database query error:", error);
