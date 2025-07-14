@@ -1,92 +1,176 @@
-import { safeQuery, sanitizeInput } from "../middlewares/database.middleware";
+import { v7 as uuidv7 } from "uuid";
+import { Request, Response, RequestHandler } from "express";
+import { sanitizeInput } from "../middlewares/database.middleware";
+import { error, success } from "../utils/api_response.util";
+import type { LoginRequest, RegisterRequest } from "../types/user.types";
+import { hashPassword, verifyPassword } from "../utils/password.util";
+import { getDatabase } from "../configs/database";
+import { generateAccessToken } from "../middlewares/jwt.middleware";
 
-const register = async (req, res) => {
+export const register: RequestHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    const email = sanitizeInput(req.body.email);
-    const password = sanitizeInput(req.body.password);
-    const username = sanitizeInput(req.body.username);
+    const body = req.body as RegisterRequest;
+    const { email: rawEmail, password: rawPassword } = body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        error: "Missing required fields",
-        message: "Email and password are required",
-      });
+    // Validate input
+    if (!rawEmail.trim() || !rawPassword.trim()) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Email and password are required",
+        })
+      );
+      return;
     }
 
-    const result = await safeQuery(async (db) => {
-      const existingUser = await db.sql`
-        SELECT id FROM User WHERE email = ${email}
-      `;
+    // Sanitize email input
+    const email = sanitizeInput(rawEmail.trim().toLowerCase());
+    if (!email)
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Invalid email address format",
+        })
+      );
 
-      if (existingUser.length > 0) {
-        throw new Error("User already exists");
-      }
+    const db = getDatabase();
 
-      const newUser = await db.sql`
-        INSERT INTO User (email, password, username, createdAt, updatedAt) 
-        VALUES (${email}, ${password}, ${username}, datetime('now'), datetime('now'))
-        RETURNING id, email, username, createdAt
-      `;
+    // Check if user already exists
+    const existingUser = await db.sql`
+      SELECT id FROM users WHERE email = ${email}
+    `;
 
-      return newUser[0];
-    });
+    if (existingUser.length > 0) {
+      res.status(400).json(
+        error({
+          title: "Registration Failed",
+          message: "User already exists",
+        })
+      );
+      return;
+    }
 
-    res.status(201).json({
-      success: true,
-      message: "User registered successfully",
-      user: result,
-    });
-  } catch (error) {
-    console.error("Registration error:", error);
-    res.status(500).json({
-      error: "Registration failed",
-      message: error.message,
-    });
+    // Create new user
+    const userId = uuidv7();
+    const hashedPassword = await hashPassword(rawPassword);
+
+    const newUser = await db.sql`
+      INSERT INTO users (id, email, password, created_at, updated_at)
+      VALUES (${userId}, ${email}, ${hashedPassword}, datetime('now'), datetime('now'))
+      RETURNING id, email, created_at
+    `;
+
+    res.status(201).json(
+      success({
+        title: "Registration Successful",
+        message: "User registered successfully",
+        data: newUser[0],
+      })
+    );
+  } catch (err) {
+    console.error("Registration error:", err);
+    res.status(500).json(
+      error({
+        title: "Internal Server Error",
+        message: "Registration failed due to an internal error",
+      })
+    );
   }
 };
 
-const login = async (req, res) => {
+export const login: RequestHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    const email = sanitizeInput(req.body.email);
-    const password = sanitizeInput(req.body.password);
+    const { email: rawEmail, password: rawPassword } = req.body as LoginRequest;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        error: "Missing credentials",
-        message: "Email and password are required",
-      });
+    // Validate input
+    if (!rawEmail.trim() || !rawPassword.trim()) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Email and password are required",
+        })
+      );
+      return;
     }
 
-    const user = await safeQuery(async (db) => {
-      const result = await db.sql`
-        SELECT id, email, username, password FROM User 
-        WHERE email = ${email}
-      `;
+    // Sanitize email input
+    const email = sanitizeInput(rawEmail.trim().toLowerCase());
+    if (!email) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Invalid email address format",
+        })
+      );
+      return;
+    }
 
-      if (result.length === 0) {
-        throw new Error("Invalid credentials");
-      }
+    // Get database instance
+    const db = getDatabase();
 
-      if (result[0].password !== password) {
-        throw new Error("Invalid credentials");
-      }
+    // Find user by email
+    const result = await db.sql`
+      SELECT id, email, username, password FROM users 
+      WHERE email = ${email}
+    `;
 
-      const { password: _, ...userWithoutPassword } = result[0];
-      return userWithoutPassword;
-    });
+    if (result.length === 0) {
+      res.status(401).json(
+        error({
+          title: "Invalid credentials",
+          message: "Authentication Failed",
+        })
+      );
+      return;
+    }
 
-    res.json({
-      success: true,
-      message: "Login successful",
-      user,
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(401).json({
-      error: "Authentication failed",
-      message: "Invalid credentials",
-    });
+    // Verify password
+    const isPasswordValid = await verifyPassword(
+      rawPassword,
+      result[0].password
+    );
+
+    if (!isPasswordValid) {
+      res.status(401).json(
+        error({
+          title: "Invalid credentials",
+          message: "Authentication Failed",
+        })
+      );
+      return;
+    }
+
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = result[0];
+
+    // Generate JWT tokens using middleware functions
+    const accessToken = generateAccessToken(
+      userWithoutPassword.id,
+      userWithoutPassword.email
+    );
+
+    console.log("Access Token:", accessToken);
+
+    res.json(
+      success({
+        title: "Login Successful",
+        message: "User authenticated successfully",
+        data: { user: userWithoutPassword, accessToken },
+      })
+    );
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json(
+      error({
+        title: "Internal Server Error",
+        message: "Login failed due to an internal error",
+      })
+    );
   }
 };
-
-export { register, login };
