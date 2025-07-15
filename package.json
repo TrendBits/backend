@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "packageManager": "yarn@4.9.1",
+  "packageManager": "yarn@4.9.2",
   "scripts": {
     "start": "ts-node src/server.ts",
     "dev": "nodemon",
