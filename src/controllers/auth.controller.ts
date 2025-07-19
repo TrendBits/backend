@@ -123,8 +123,8 @@ export const login: RequestHandler = async (
     if (result.length === 0) {
       res.status(401).json(
         error({
-          title: "Invalid credentials",
-          message: "Authentication Failed",
+          title: "Authentication Failed",
+          message: "Invalid credentials",
         })
       );
       return;
@@ -139,8 +139,8 @@ export const login: RequestHandler = async (
     if (!isPasswordValid) {
       res.status(401).json(
         error({
-          title: "Invalid credentials",
-          message: "Authentication Failed",
+          title: "Authentication Failed",
+          message: "Invalid credentials",
         })
       );
       return;
