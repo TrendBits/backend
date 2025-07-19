@@ -150,18 +150,18 @@ export const login: RequestHandler = async (
     const { password: _, ...userWithoutPassword } = result[0];
 
     // Generate JWT tokens using middleware functions
-    const accessToken = generateAccessToken(
+    const access_token = generateAccessToken(
       userWithoutPassword.id,
       userWithoutPassword.email
     );
 
-    console.log("Access Token:", accessToken);
+    console.log("Access Token:", access_token);
 
     res.json(
       success({
         title: "Login Successful",
         message: "User authenticated successfully",
-        data: { user: userWithoutPassword, accessToken },
+        data: { user: userWithoutPassword, access_token },
       })
     );
   } catch (err) {
