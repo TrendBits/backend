@@ -4,8 +4,9 @@ import { sanitizeInput } from "../middlewares/database.middleware";
 import { error, success } from "../utils/api_response.util";
 import type { LoginRequest, RegisterRequest } from "../types/user.types";
 import { hashPassword, verifyPassword } from "../utils/password.util";
-import { getDatabase } from "../configs/database";
 import { generateAccessToken } from "../middlewares/jwt.middleware";
+import { getDatabase, queryWithRetry } from "../configs/database";
+import type { Database } from "@sqlitecloud/drivers";
 
 export const register: RequestHandler = async (
   req: Request,
@@ -36,12 +37,12 @@ export const register: RequestHandler = async (
         })
       );
 
-    const db = getDatabase();
+    const db: Database = await getDatabase();
 
     // Check if user already exists
-    const existingUser = await db.sql`
-      SELECT id FROM users WHERE email = ${email}
-    `;
+    const existingUser = await queryWithRetry(
+      () => db.sql`SELECT id FROM users WHERE email = ${email}`
+    );
 
     if (existingUser.length > 0) {
       res.status(400).json(
@@ -57,11 +58,12 @@ export const register: RequestHandler = async (
     const userId = uuidv7();
     const hashedPassword = await hashPassword(rawPassword);
 
-    const newUser = await db.sql`
+    const newUser = await queryWithRetry(
+      () => db.sql`
       INSERT INTO users (id, email, password, created_at, updated_at)
       VALUES (${userId}, ${email}, ${hashedPassword}, datetime('now'), datetime('now'))
-      RETURNING id, email, created_at
-    `;
+      RETURNING id, email, created_at`
+    );
 
     res.status(201).json(
       success({
@@ -112,13 +114,13 @@ export const login: RequestHandler = async (
     }
 
     // Get database instance
-    const db = getDatabase();
+    const db: Database = await getDatabase();
 
     // Find user by email
-    const result = await db.sql`
-      SELECT id, email, username, password FROM users 
-      WHERE email = ${email}
-    `;
+    const result = await queryWithRetry(
+      () =>
+        db.sql`SELECT id, email, username, password FROM users WHERE email = ${email}`
+    );
 
     if (result.length === 0) {
       res.status(401).json(

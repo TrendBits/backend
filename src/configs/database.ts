@@ -15,7 +15,7 @@ const validateEnvironment = () => {
     );
 };
 
-const connectToDatabase = async () => {
+export const connectToDatabase = async () => {
   if (db) return db;
 
   validateEnvironment();
@@ -51,9 +51,39 @@ const connectToDatabase = async () => {
   }
 };
 
-const getDatabase = () => {
-  if (!db) throw new Error("Database not connected");
-  return db;
+export const getDatabase = async () => {
+  if (db) {
+    try {
+      await db.sql`SELECT 1`;
+      return db;
+    } catch (error) {
+      console.warn("Database connection is stale, reconnecting...");
+      db = null;
+    }
+    return connectToDatabase();
+  }
 };
 
-export { connectToDatabase, getDatabase };
+export const queryWithRetry = async <T>(
+  operation: () => Promise<T>,
+  retries = MAX_RETRY_ATTEMPTS
+): Promise<T> => {
+  let attempt = 0;
+  while (attempt < retries) {
+    try {
+      return await operation();
+    } catch (err) {
+      if (
+        err?.errorCode === "ERR_CONNECTION_NOT_ESTABLISHED" ||
+        err?.message?.includes("Connection unavailable")
+      ) {
+        console.warn(`DB operation failed. Retrying... (${attempt + 1})`);
+        db = null;
+        await connectToDatabase(); // reconnect ro db
+        attempt++;
+      } else {
+        throw err;
+      }
+    }
+  }
+};
