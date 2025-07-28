@@ -7,13 +7,15 @@
     "migrate": "ts-node src/utils/migration_runner.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.11.0",
     "@sqlitecloud/drivers": "^1.0.507",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^4.0.10"
   },
   "devDependencies": {
     "@types/cors": "^2",

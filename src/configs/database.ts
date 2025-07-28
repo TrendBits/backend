@@ -69,7 +69,7 @@ export const queryWithRetry = async <T>(
   retries = MAX_RETRY_ATTEMPTS
 ): Promise<T> => {
   let attempt = 0;
-  while (attempt < retries) {
+  while (attempt <= retries) {
     try {
       return await operation();
     } catch (err) {
