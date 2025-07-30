@@ -44,10 +44,8 @@ export function parseGeminiJsonBlock(text: string): any | null {
 export function validateGeminiSummary(data: any) {
   try {
     // Try to parse as JSON first if it's a string
-    const parsedData =
-      typeof data === "string" ? parseGeminiJsonBlock(data) : data;
+    const parsedData = typeof data === "string" ? parseGeminiJsonBlock(data) : data;
     const result = geminiSummarySchema.safeParse(parsedData);
-    console.log(result);
     if (result.success) {
       return { success: true, data: result.data };
     }
