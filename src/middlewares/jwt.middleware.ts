@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import { error, success } from "../utils/api_response.util";
+import { getDatabase, queryWithRetry } from "../configs/database";
 
 // Extend Request interface to include user data
 declare global {
@@ -99,7 +100,7 @@ export const validateJwtToken = (
   jwt.verify(
     token,
     process.env.JWT_SECRET || "your-secret-key",
-    (err, decoded) => {
+    async (err, decoded: any) => {
       if (err) {
         let title = "Authentication Failed";
         let message = "Please sign in again";
@@ -116,6 +117,32 @@ export const validateJwtToken = (
           error({
             title,
             message,
+          })
+        );
+        return;
+      }
+
+      // Check if user email still exists in DB
+      try {
+        const db = await getDatabase();
+        const user = await queryWithRetry(
+          () =>
+            db.sql`SELECT id, email, password FROM users WHERE email = ${decoded.email}`
+        );
+        if (!user) {
+          res.status(401).json(
+            error({
+              title: "Authentication Failed",
+              message: "Ops you are not authenticated. Please sign in again.",
+            })
+          );
+          return;
+        }
+      } catch (dbErr) {
+        res.status(500).json(
+          error({
+            title: "Internal Server Error",
+            message: "Ops could not validate user. Please sign in again.",
           })
         );
         return;

@@ -40,7 +40,7 @@ export async function verifyPassword(
 export function generateResetToken() {
   const resetToken = uuidv4();
   const expiryMinutes = parseInt(
-    process.env.RESET_TOKEN_EXPIRY_MINUTES || "60",
+    process.env.RESET_TOKEN_EXPIRY_MINUTES || "10",
     10
   );
   const expiresAt = new Date(
