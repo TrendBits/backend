@@ -7,6 +7,9 @@ import {
   filterGeminiSummarySections,
   validateGeminiSummary,
 } from "../utils/gemini_summary.util";
+import { getDatabase, queryWithRetry } from "../configs/database";
+import type { Database } from "@sqlitecloud/drivers";
+import { v7 as uuidv7 } from "uuid";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -16,6 +19,8 @@ export const generateSummary = async (
 ): Promise<void> => {
   try {
     const { prompt } = req.body as PromptRequest;
+    // Get user ID from JWT middleware
+    const userId = req.user?.user_id; 
 
     if (!prompt || !prompt.trim()) {
       res.status(400).json(
@@ -27,40 +32,88 @@ export const generateSummary = async (
       return;
     }
 
-    // Use Gemini AI to generate a structured, slightly longer summary
+    // Use Gemini AI to generate a structured, comprehensive AI-focused summary
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
       contents: `
-        You are an AI assistant for a trend analysis platform called TrendBits.
+        You are an AI technology expert and trend analyst for TrendBits, a platform specializing in artificial intelligence developments and innovations.
 
-        Your task is to summarize any given trend in a **narrative, engaging format** suitable for conversion into a **1–3 minute podcast segment**. Your output must strictly follow the JSON example below (all fields required):
+        Your task is to create a **comprehensive, detailed analysis** of the given AI trend, formatted as an engaging **3-5 minute podcast segment**. This should be substantially more detailed than a typical summary - users want to understand the full scope and implications of what they're missing out on.
+
+        Your output must strictly follow this JSON structure:
 
         Gemini Podcast Summary JSON Example:
         ${geminiSummaryJsonExample}
 
-        💡 Your tone should be intelligent yet conversational — imagine you're scripting a podcast for curious young professionals.
+        **CONTENT REQUIREMENTS:**
 
-        ✅ Always include relevant dates, names, events, and background to explain **what is happening**, **why it's important**, and **what's next** in that field.
+        📊 **Summary Field (200-400 words)**: Create a comprehensive narrative that includes:
+        - **Background Context**: What led to this development? Historical context within AI
+        - **Technical Details**: Explain the technology, methodology, or approach in accessible terms
+        - **Key Players**: Companies, researchers, institutions involved
+        - **Current Impact**: How this is affecting the AI landscape right now
+        - **Market Implications**: Business, economic, or industry effects
+        - **Future Trajectory**: Where this trend is heading, potential developments
+        - **Why It Matters**: The broader significance for AI advancement and society
 
-        ❌ DO NOT include explanations about what you’re doing or any disclaimers.
-        ❌ DO NOT wrap the JSON in markdown or add comments — only pure JSON.
+        🎯 **Key Points (6-8 detailed points)**: Each point should be substantial (15-25 words) covering:
+        - Specific technical achievements or breakthroughs
+        - Quantifiable metrics, funding amounts, performance improvements
+        - Strategic partnerships, acquisitions, or collaborations
+        - Competitive landscape changes
+        - Regulatory or ethical implications
+        - Real-world applications and use cases
+        - Expert opinions or industry reactions
+        - Timeline milestones and upcoming developments
 
-        Trend to summarize:
+        🎙️ **Tone & Style**:
+        - Write as if explaining to tech-savvy professionals who want deep insights
+        - Use specific terminology but explain complex concepts clearly
+        - Include concrete examples, case studies, and real-world applications
+        - Reference recent developments, dates, and specific figures when relevant
+        - Make connections to broader AI trends and ecosystem developments
+
+        ❌ **STRICT REQUIREMENTS**:
+        - Focus EXCLUSIVELY on AI, machine learning, or related technology trends
+        - NO generic business or non-tech topics unless directly AI-related
+        - NO brief or surface-level explanations - go deep
+        - NO speculation without basis - stick to facts and informed analysis
+        - Output ONLY pure JSON, no markdown or explanations
+
+        **AI Trend to Analyze:**
         ${prompt.trim()}
       `,
       config: {
         thinkingConfig: {
-          thinkingBudget: 512,
+          thinkingBudget: 1024,
         },
         systemInstruction: `
-          You are a trend analyst and podcast scriptwriter for an AI-powered news product. Your audience expects concise, insightful, and engaging audio summaries about specific global or niche trends — tech, politics, culture, finance, science, etc.
+          You are a senior AI technology analyst and podcast content creator specializing in artificial intelligence trends, breakthroughs, and industry developments.
 
-          Your goal is to produce podcast-ready structured summaries based on any trend keyword or phrase. Output should ONLY be a JSON object following the schema provided.
+          Your expertise covers:
+          - Machine learning and deep learning advances
+          - AI model architectures and training methodologies
+          - AI hardware and infrastructure developments
+          - AI startup ecosystem and venture funding
+          - Enterprise AI adoption and implementation
+          - AI research breakthroughs from academia and industry
+          - AI policy, ethics, and regulatory developments
+          - AI applications across industries (healthcare, finance, autonomous systems, etc.)
 
-          Keep your voice clear, confident, and human-friendly. Don't speculate unless clearly necessary. Always provide context, recent developments, and potential implications.
+          Your goal is to provide comprehensive, detailed analysis that helps users understand not just WHAT is happening, but WHY it matters, HOW it works, and WHERE it's heading.
 
-          Never include code, markdown, or surrounding text — only the raw JSON block.`,
+          Always prioritize:
+          - Technical accuracy and depth
+          - Business and strategic implications
+          - Connections to broader AI ecosystem trends
+          - Actionable insights for professionals in the field
+          - Concrete examples and real-world applications
+
+          Never provide superficial coverage - users come to TrendBits for deep, expert-level analysis they can't get elsewhere.
+
+          Output format: Pure JSON only, following the exact schema provided.
+        `,
       },
     });
 
@@ -80,6 +133,33 @@ export const generateSummary = async (
       return;
     }
 
+    // Save to user's history if user is logged in
+    if (userId && structured) {
+      try {
+        const db: Database = await getDatabase();
+        const historyId = uuidv7();
+        const now = new Date().toISOString();
+
+        await queryWithRetry(
+          () => db.sql`
+            INSERT INTO trend_history (
+              id, user_id, search_term, headline, summary, 
+              key_points, call_to_action, created_at, updated_at
+            )
+            VALUES (
+              ${historyId}, ${userId}, ${prompt.trim()}, ${structured.headline}, ${structured.summary},
+              ${JSON.stringify(structured.key_points)}, ${structured.call_to_action}, ${now}, ${now}
+            )
+          `
+        );
+
+        console.log(`Saved trend summary to history for user ${userId}`);
+      } catch (historyError) {
+        // Log the error but don't fail the main request
+        console.error("Failed to save to history:", historyError);
+      }
+    }
+
     res.json(
       success({
         title: "AI Trend Summary",
@@ -87,6 +167,7 @@ export const generateSummary = async (
         data: {
           ...structured,
           searchTerm: prompt,
+          saved_to_history: !!userId, // Indicate if it was saved to history
         },
       })
     );
