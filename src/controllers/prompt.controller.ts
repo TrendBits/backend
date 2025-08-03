@@ -51,7 +51,7 @@ export const generateSummary = async (
       `,
       config: {
         thinkingConfig: {
-          thinkingBudget: 0,
+          thinkingBudget: 512,
         },
         systemInstruction: `
           You are a trend analyst and podcast scriptwriter for an AI-powered news product. Your audience expects concise, insightful, and engaging audio summaries about specific global or niche trends — tech, politics, culture, finance, science, etc.

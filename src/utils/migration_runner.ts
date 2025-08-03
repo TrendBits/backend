@@ -15,9 +15,9 @@ export const migrationRunner = async () => {
 
     const migrationDir = path.join(__dirname, "../migrations");
 
-    const files = readdirSync(migrationDir).filter((file) =>
-      file.endsWith(".sql")
-    );
+    const files = readdirSync(migrationDir)
+      .filter((file) => file.endsWith(".sql"))
+      .sort(); // Sort to ensure consistent order
 
     console.log(`Found ${files.length} migration files`);
 
@@ -33,14 +33,27 @@ export const migrationRunner = async () => {
         .map((stmt) => stmt.trim())
         .filter((stmt) => stmt.length > 0);
 
-      for (const statement of statements) {
+      for (let i = 0; i < statements.length; i++) {
+        const statement = statements[i];
         try {
           await db.exec(statement);
-          console.log(`Executed statement from ${file}`);
+          console.log(`✅ Executed statement ${i + 1}/${statements.length} from ${file}`);
         } catch (error) {
-          console.error(`Error executing statement from ${file}:`, error);
+          console.error(`❌ Error in ${file} statement ${i + 1}:`, error.message);
         }
       }
+    }
+
+    // Verify tables were created
+    try {
+      const tables = await db.sql`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name NOT LIKE 'sqlite_%'
+        ORDER BY name
+      `;
+      console.log("Created tables:", tables.map(t => t.name));
+    } catch (error) {
+      console.error("Error verifying tables:", error.message);
     }
 
     console.log("Migration completed successfully!");
