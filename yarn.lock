@@ -388,6 +388,7 @@ __metadata:
     dotenv: "npm:^17.0.0"
     express: "npm:^5.1.0"
     jsonwebtoken: "npm:^9.0.2"
+    nodemailer: "npm:^7.0.5"
     nodemon: "npm:^3.1.10"
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.8.3"
@@ -1670,6 +1671,13 @@ __metadata:
   bin:
     node-gyp: bin/node-gyp.js
   checksum: 10c0/bd8d8c76b06be761239b0c8680f655f6a6e90b48e44d43415b11c16f7e8c15be346fba0cbf71588c7cdfb52c419d928a7d3db353afc1d952d19756237d8f10b9
+  languageName: node
+  linkType: hard
+
+"nodemailer@npm:^7.0.5":
+  version: 7.0.5
+  resolution: "nodemailer@npm:7.0.5"
+  checksum: 10c0/8fcd417a5dc6cdde4193c3f27c8ae07f6998527578c1e70adfa5f2f00121471fcaa14abbf26b2a8c513ac8505c956f437aa2c2a693606eb0e8c68bc712698fa7
   languageName: node
   linkType: hard
 
