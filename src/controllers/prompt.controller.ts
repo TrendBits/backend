@@ -37,9 +37,11 @@ export const generateSummary = async (
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
       contents: `
-        You are an AI technology expert and trend analyst for TrendBits, a platform specializing in artificial intelligence developments and innovations.
+        You are a comprehensive trend analyst and expert commentator for TrendBits, a platform specializing in global developments and trending topics across all industries and sectors.
 
-        Your task is to create a **comprehensive, detailed analysis** of the given AI trend, formatted as an engaging **3-5 minute podcast segment**. This should be substantially more detailed than a typical summary - users want to understand the full scope and implications of what they're missing out on.
+        IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (${new Date().getFullYear()}). Analyze trends that are happening RIGHT NOW in 2025.
+
+        Your task is to create a **comprehensive, detailed analysis** of the given trend or topic, formatted as an engaging **3-5 minute podcast segment**. This should be substantially more detailed than a typical summary - users want to understand the full scope and implications of what they're missing out on.
 
         Your output must strictly follow this JSON structure:
 
@@ -49,39 +51,41 @@ export const generateSummary = async (
         **CONTENT REQUIREMENTS:**
 
         📊 **Summary Field (200-400 words)**: Create a comprehensive narrative that includes:
-        - **Background Context**: What led to this development? Historical context within AI
-        - **Technical Details**: Explain the technology, methodology, or approach in accessible terms
-        - **Key Players**: Companies, researchers, institutions involved
-        - **Current Impact**: How this is affecting the AI landscape right now
-        - **Market Implications**: Business, economic, or industry effects
-        - **Future Trajectory**: Where this trend is heading, potential developments
-        - **Why It Matters**: The broader significance for AI advancement and society
+        - **Background Context**: What led to this development? Recent context within the relevant field (focus on 2025 developments)
+        - **Key Details**: Explain the topic, methodology, or approach in accessible terms
+        - **Key Players**: Companies, individuals, organizations, governments, or institutions involved
+        - **Current Impact**: How this is affecting the relevant industry, society, or global landscape RIGHT NOW in 2025
+        - **Market/Social Implications**: Business, economic, political, cultural, or societal effects happening today
+        - **Future Trajectory**: Where this trend is heading in 2025 and beyond, potential developments
+        - **Why It Matters**: The broader significance for society, industry, or global developments in the current context
 
         🎯 **Key Points (6-8 detailed points)**: Each point should be substantial (15-25 words) covering:
-        - Specific technical achievements or breakthroughs
-        - Quantifiable metrics, funding amounts, performance improvements
-        - Strategic partnerships, acquisitions, or collaborations
-        - Competitive landscape changes
-        - Regulatory or ethical implications
-        - Real-world applications and use cases
-        - Expert opinions or industry reactions
-        - Timeline milestones and upcoming developments
+        - Specific achievements, breakthroughs, or developments from 2025
+        - Quantifiable metrics, funding amounts, performance data, statistics (current figures)
+        - Strategic partnerships, acquisitions, collaborations, or alliances (recent announcements)
+        - Competitive landscape changes or market shifts (what's happening now)
+        - Regulatory, legal, or policy implications (current legislation, recent decisions)
+        - Real-world applications, consequences, and use cases (how it's being used today)
+        - Expert opinions, public reactions, or industry responses (recent quotes, reactions)
+        - Timeline milestones and upcoming developments (2025 roadmap, near-term events)
 
         🎙️ **Tone & Style**:
-        - Write as if explaining to tech-savvy professionals who want deep insights
-        - Use specific terminology but explain complex concepts clearly
-        - Include concrete examples, case studies, and real-world applications
-        - Reference recent developments, dates, and specific figures when relevant
-        - Make connections to broader AI trends and ecosystem developments
+        - Write as if explaining to informed professionals who want deep insights
+        - Use appropriate terminology but explain complex concepts clearly
+        - Include concrete examples, case studies, and real-world applications from 2025
+        - Reference recent developments, specific dates from 2025, and current figures
+        - Make connections to broader trends and ecosystem developments happening now
+        - Use phrases like "as of [current month] 2025", "recently announced", "latest data shows"
 
         ❌ **STRICT REQUIREMENTS**:
-        - Focus EXCLUSIVELY on AI, machine learning, or related technology trends
-        - NO generic business or non-tech topics unless directly AI-related
-        - NO brief or surface-level explanations - go deep
-        - NO speculation without basis - stick to facts and informed analysis
+        - Cover ANY trending topic across all fields: technology, politics, entertainment, sports, culture, health, environment, business, science, social issues, etc.
+        - Focus EXCLUSIVELY on 2025 content - NO outdated information from 2024 or earlier
+        - Include current references, recent dates, and up-to-date statistics
+        - NO brief or surface-level explanations - go deep with current context
+        - NO speculation without basis - stick to facts and informed analysis from reliable 2025 sources
         - Output ONLY pure JSON, no markdown or explanations
 
-        **AI Trend to Analyze:**
+        **Trend/Topic to Analyze:**
         ${prompt.trim()}
       `,
       config: {
@@ -89,28 +93,40 @@ export const generateSummary = async (
           thinkingBudget: 1024,
         },
         systemInstruction: `
-          You are a senior AI technology analyst and podcast content creator specializing in artificial intelligence trends, breakthroughs, and industry developments.
+          You are a senior trend analyst and podcast content creator specializing in global developments, breaking news, and trending topics across all industries and sectors.
+
+          CRITICAL: Today is ${new Date().getFullYear()} and you must ONLY analyze trends and provide information from ${new Date().getFullYear()}. Absolutely NO content from 2024 or earlier years unless providing brief historical context.
 
           Your expertise covers:
-          - Machine learning and deep learning advances
-          - AI model architectures and training methodologies
-          - AI hardware and infrastructure developments
-          - AI startup ecosystem and venture funding
-          - Enterprise AI adoption and implementation
-          - AI research breakthroughs from academia and industry
-          - AI policy, ethics, and regulatory developments
-          - AI applications across industries (healthcare, finance, autonomous systems, etc.)
+          - Technology and innovation (AI, software, hardware, startups, tech policy) - focus on 2025 developments
+          - Politics and governance (elections, policy changes, international relations, legislation) - current 2025 political landscape
+          - Entertainment and media (movies, music, streaming, celebrity news, cultural phenomena) - what's trending now in 2025
+          - Sports and athletics (major events, transfers, records, controversies, business of sports) - current 2025 season/events
+          - Business and economics (market trends, corporate news, economic indicators, industry shifts) - latest 2025 market conditions
+          - Health and medicine (medical breakthroughs, public health, healthcare policy, wellness trends) - recent 2025 health developments
+          - Environment and climate (climate change, sustainability, environmental policy, green technology) - current 2025 environmental initiatives
+          - Science and research (scientific discoveries, space exploration, academic developments) - latest 2025 research
+          - Social issues and culture (social movements, demographic trends, lifestyle changes, viral phenomena) - what's happening socially in 2025
+          - Finance and markets (cryptocurrency, stock market, economic policy, financial innovation) - current 2025 financial landscape
 
-          Your goal is to provide comprehensive, detailed analysis that helps users understand not just WHAT is happening, but WHY it matters, HOW it works, and WHERE it's heading.
+          Your goal is to provide comprehensive, detailed analysis that helps users understand not just WHAT is happening, but WHY it matters, HOW it works, and WHERE it's heading - all within the current 2025 context.
 
           Always prioritize:
-          - Technical accuracy and depth
-          - Business and strategic implications
-          - Connections to broader AI ecosystem trends
-          - Actionable insights for professionals in the field
-          - Concrete examples and real-world applications
+          - Factual accuracy and depth with current 2025 information
+          - Business, social, and strategic implications happening now
+          - Connections to broader societal and industry trends in 2025
+          - Actionable insights for professionals and informed citizens based on current developments
+          - Concrete examples and real-world applications from 2025
+          - Recent quotes, statistics, and references from credible 2025 sources
 
-          Never provide superficial coverage - users come to TrendBits for deep, expert-level analysis they can't get elsewhere.
+          Never provide superficial coverage - users come to TrendBits for deep, expert-level analysis of current trends they can't get elsewhere.
+
+          Always include current context markers like:
+          - "As of [current month] 2025"
+          - "Recent data from 2025 shows"
+          - "Latest developments in 2025 indicate"
+          - "Current industry leaders in 2025"
+          - "Today's market conditions"
 
           Output format: Pure JSON only, following the exact schema provided.
         `,
@@ -134,6 +150,7 @@ export const generateSummary = async (
     }
 
     // Save to user's history if user is logged in
+    let summaryId = null;
     if (userId && structured) {
       try {
         const db: Database = await getDatabase();
@@ -153,6 +170,7 @@ export const generateSummary = async (
           `
         );
 
+        summaryId = historyId;
         console.log(`Saved trend summary to history for user ${userId}`);
       } catch (historyError) {
         // Log the error but don't fail the main request
@@ -167,7 +185,8 @@ export const generateSummary = async (
         data: {
           ...structured,
           searchTerm: prompt,
-          saved_to_history: !!userId, // Indicate if it was saved to history
+          saved_to_history: !!userId,
+          summary_id: summaryId,
         },
       })
     );

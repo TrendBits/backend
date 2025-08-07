@@ -9,7 +9,7 @@ interface SaveTrendRequest {
   search_term: string;
   headline: string;
   summary: string;
-  key_points: string[]; // Array from prompt controller
+  key_points: string[];
   call_to_action: string;
 }
 
@@ -20,7 +20,7 @@ interface TrendHistoryDbItem {
   search_term: string;
   headline: string;
   summary: string;
-  key_points: string; // JSON string from database
+  key_points: string; 
   call_to_action: string;
   created_at: string;
   updated_at: string;
@@ -33,7 +33,7 @@ interface TrendHistoryItem {
   search_term: string;
   headline: string;
   summary: string;
-  key_points: string[]; // Array for API response
+  key_points: string[];
   call_to_action: string;
   created_at: string;
   updated_at: string;
@@ -317,6 +317,80 @@ export const getTrends = async (
   }
 };
 
+// Get specific trend by ID
+    export const getTrendById = async (
+      req: Request,
+      res: Response
+    ): Promise<void> => {
+      try {
+        const userId = req.user?.user_id;
+        
+        if (!userId) {
+          res.status(401).json(
+            error({
+              title: "Authentication Required",
+              message: "Please log in to view your history",
+            })
+          );
+          return;
+        }
+    
+        const { id } = req.params;
+    
+        if (!id) {
+          res.status(400).json(
+            error({
+              title: "Validation Error",
+              message: "Trend ID is required",
+            })
+          );
+          return;
+        }
+    
+        const db: Database = await getDatabase();
+    
+        const trendResult = await queryWithRetry(
+          () => db.sql`
+            SELECT id, search_term, headline, summary, key_points, 
+                   call_to_action, created_at, updated_at
+            FROM trend_history 
+            WHERE id = ${id} AND user_id = ${userId}
+          `
+        ) as TrendHistoryDbItem[];
+    
+        if (trendResult.length === 0) {
+          res.status(404).json(
+            error({
+              title: "Trend Not Found",
+              message: "The requested trend was not found in your history",
+            })
+          );
+          return;
+        }
+    
+        const trend: TrendHistoryItem = {
+          ...trendResult[0],
+          key_points: parseKeyPoints(trendResult[0].key_points),
+        };
+    
+        res.json(
+          success({
+            title: "Trend Retrieved",
+            message: "Successfully retrieved trend details",
+            data: trend,
+          })
+        );
+      } catch (err) {
+        console.error("Get trend by ID error:", err);
+        res.status(500).json(
+          error({
+            title: "Internal Server Error",
+            message: "Failed to retrieve trend",
+          })
+        );
+      }
+    };
+
 // Delete trend from history
 export const deleteTrend = async (
   req: Request,
@@ -338,7 +412,7 @@ export const deleteTrend = async (
 
     const db: Database = await getDatabase();
 
-    const deleteResult = await queryWithRetry(
+    await queryWithRetry(
       () => db.sql`
         DELETE FROM trend_history 
         WHERE id = ${trendId} AND user_id = ${userId}

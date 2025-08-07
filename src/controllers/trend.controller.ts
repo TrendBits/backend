@@ -65,7 +65,7 @@ export const getHotTopics = async (
 
     res.json(
       success({
-        title: "Hot AI Topics Retrieved",
+        title: "Hot Topics Retrieved",
         message: "Successfully retrieved latest AI trends",
         data: {
           topics,
@@ -98,7 +98,9 @@ export const generateHotTopics = async (
       contents: `
         You are a global trend analyst for TrendBits, a platform that tracks the latest trending topics worldwide.
 
-        Generate 6 hot trending topics that are currently popular or recently emerged globally. Each topic should be structured as a JSON object with the following schema:
+        IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (${new Date().getFullYear()}). Generate trends that are happening RIGHT NOW in 2025.
+
+        Generate 6 hot trending topics that are currently popular or recently emerged globally in the past 1-2 weeks. Each topic should be structured as a JSON object with the following schema:
 
         {
           "icon": "TrendingUp" | "Globe" | "Zap" | "Users" | "Calendar" | "Star" | "Heart" | "MessageCircle" | "Play" | "Music" | "Camera" | "Gamepad2",
@@ -107,17 +109,23 @@ export const generateHotTopics = async (
           "query": "Detailed search query that would help find more information about this topic"
         }
 
-        Focus on diverse categories:
-        - Technology and innovation breakthroughs
-        - Entertainment and pop culture phenomena
-        - Social media viral trends and challenges
-        - Sports events and achievements
-        - Political developments and world events
-        - Health and lifestyle trends
-        - Environmental and climate news
-        - Business and economic developments
-        - Scientific discoveries and research
-        - Cultural movements and social issues
+        Focus on diverse categories with CURRENT 2025 developments:
+        - Technology and innovation breakthroughs (latest AI releases, tech announcements)
+        - Entertainment and pop culture phenomena (current movies, music, viral content)
+        - Social media viral trends and challenges (trending hashtags, memes, challenges)
+        - Sports events and achievements (ongoing seasons, recent games, transfers)
+        - Political developments and world events (current politics, international news)
+        - Health and lifestyle trends (wellness trends, health news)
+        - Environmental and climate news (recent climate events, sustainability news)
+        - Business and economic developments (market news, company announcements)
+        - Scientific discoveries and research (recent studies, breakthroughs)
+        - Cultural movements and social issues (current social topics, movements)
+
+        STRICT REQUIREMENTS:
+        - Only include trends from 2025 - NO 2024 or older content
+        - Focus on what's trending TODAY or within the last 1-2 weeks
+        - Use current event examples in your queries
+        - Make titles reflect current timeframe (e.g., "January 2025", "Latest", "New")
 
         Return ONLY a JSON array of 6 objects, no markdown formatting or explanations.
 
@@ -125,9 +133,9 @@ export const generateHotTopics = async (
         [
           {
             "icon": "TrendingUp",
-            "title": "Climate Summit 2025",
-            "description": "Global leaders unite on ambitious climate targets",
-            "query": "COP30 climate summit 2025 global agreements carbon targets"
+            "title": "AI Breakthrough 2025",
+            "description": "Latest AI model release shaking tech industry",
+            "query": "latest AI model release January 2025 breakthrough technology"
           }
         ]
       `,
@@ -138,11 +146,15 @@ export const generateHotTopics = async (
         systemInstruction: `
           You are a trend analyst specializing in global trending topics across all categories. Your job is to identify and summarize the most current and relevant trends worldwide.
           
+          CRITICAL: Today is ${new Date().getFullYear()} and you must ONLY generate trends from ${new Date().getFullYear()}. Absolutely NO content from 2024 or earlier years.
+          
           Always return valid JSON arrays only. Never include markdown, explanations, or any text outside the JSON structure.
           
           Keep titles concise and impactful. Descriptions should be informative but brief. Queries should be comprehensive search terms that would yield relevant results.
           
-          Focus on recent developments (within the last 1 weeks) and emerging trends that would interest a general global audience. Cover diverse topics from technology, entertainment, politics, sports, culture, and more.
+          Focus EXCLUSIVELY on developments from the past 1-2 weeks in ${new Date().getFullYear()} that are trending RIGHT NOW. Cover diverse topics from technology, entertainment, politics, sports, culture, and more.
+          
+          Your trends should reflect what people are talking about TODAY, not historical events.
         `,
       },
     });

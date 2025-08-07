@@ -3,6 +3,7 @@ import { authenticateToken } from "../middlewares/jwt.middleware";
 import {
   saveTrendSummary,
   getTrends,
+  getTrendById,
   deleteTrend,
 } from "../controllers/history.controller";
 
@@ -13,6 +14,9 @@ historyRouter.use(authenticateToken);
 
 // POST /history - Save a trend summary to user's history
 historyRouter.post("/", saveTrendSummary);
+
+// GET /history/:id - Get specific trend by ID
+historyRouter.get("/:id", getTrendById);
 
 // GET /history - Unified endpoint for all trend retrieval operations
 // Supports multiple query patterns:
