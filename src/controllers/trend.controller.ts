@@ -91,39 +91,43 @@ export const generateHotTopics = async (
   res: Response
 ): Promise<void> => {
   try {
-    // Use Gemini AI to generate hot AI topics
+    // Use Gemini AI to generate hot trending topics
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
       contents: `
-        You are an AI trend analyst for TrendBits, a platform that tracks the latest developments in artificial intelligence.
+        You are a global trend analyst for TrendBits, a platform that tracks the latest trending topics worldwide.
 
-        Generate 6 hot AI topics that are currently trending or recently announced. Each topic should be structured as a JSON object with the following schema:
+        Generate 6 hot trending topics that are currently popular or recently emerged globally. Each topic should be structured as a JSON object with the following schema:
 
         {
-          "icon": "Brain" | "TrendingUp" | "Zap" | "Cpu" | "Globe" | "Rocket",
+          "icon": "TrendingUp" | "Globe" | "Zap" | "Users" | "Calendar" | "Star" | "Heart" | "MessageCircle" | "Play" | "Music" | "Camera" | "Gamepad2",
           "title": "Concise, catchy title (max 4 words)",
           "description": "Brief description explaining what this trend is about (max 60 characters)",
           "query": "Detailed search query that would help find more information about this topic"
         }
 
-        Focus on:
-        - Latest AI model releases (GPT, Gemini, Claude, etc.)
-        - AI company funding rounds and acquisitions
-        - New AI applications in different industries
-        - AI hardware and chip developments
-        - AI policy and regulation updates
-        - Breakthrough AI research papers
+        Focus on diverse categories:
+        - Technology and innovation breakthroughs
+        - Entertainment and pop culture phenomena
+        - Social media viral trends and challenges
+        - Sports events and achievements
+        - Political developments and world events
+        - Health and lifestyle trends
+        - Environmental and climate news
+        - Business and economic developments
+        - Scientific discoveries and research
+        - Cultural movements and social issues
 
         Return ONLY a JSON array of 6 objects, no markdown formatting or explanations.
 
         Example format:
         [
           {
-            "icon": "Brain",
-            "title": "Meta's AI Vision",
-            "description": "Mark Zuckerberg's personal superintelligence strategy",
-            "query": "Meta AI personal superintelligence Mark Zuckerberg strategy 2025"
+            "icon": "TrendingUp",
+            "title": "Climate Summit 2025",
+            "description": "Global leaders unite on ambitious climate targets",
+            "query": "COP30 climate summit 2025 global agreements carbon targets"
           }
         ]
       `,
@@ -132,13 +136,13 @@ export const generateHotTopics = async (
           thinkingBudget: 512,
         },
         systemInstruction: `
-          You are a trend analyst specializing in artificial intelligence developments. Your job is to identify and summarize the most current and relevant AI trends.
+          You are a trend analyst specializing in global trending topics across all categories. Your job is to identify and summarize the most current and relevant trends worldwide.
           
           Always return valid JSON arrays only. Never include markdown, explanations, or any text outside the JSON structure.
           
           Keep titles concise and impactful. Descriptions should be informative but brief. Queries should be comprehensive search terms that would yield relevant results.
           
-          Focus on recent developments (within the last 3-6 months) and emerging trends that would interest tech professionals and AI enthusiasts.
+          Focus on recent developments (within the last 1 weeks) and emerging trends that would interest a general global audience. Cover diverse topics from technology, entertainment, politics, sports, culture, and more.
         `,
       },
     });
@@ -203,8 +207,8 @@ export const generateHotTopics = async (
 
     res.status(200).json(
       success({
-        title: "Hot AI Topics Generated",
-        message: "Successfully generated and stored latest AI trends",
+        title: "Hot Topics Generated",
+        message: "Successfully generated and stored latest trending topics",
         data: {
           topics: hotTopics,
           generatedAt: now,
@@ -218,7 +222,7 @@ export const generateHotTopics = async (
     res.status(500).json(
       error({
         title: "Internal Server Error",
-        message: "Failed to generate hot AI topics",
+        message: "Failed to generate hot trending topics",
       })
     );
   }
