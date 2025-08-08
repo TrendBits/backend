@@ -12,7 +12,7 @@ export const sendRequestResetPasswordEmail = async (
     },
   });
 
-  const resetLink = `${process.env.WEBAPP_URL}/auth/reset-password/verify?token=${resetToken}`;
+  const resetLink = `${process.env.WEBAPP_URL}/auth/request-password/verify?token=${resetToken}`;
 
   const mailOptions = {
     from: process.env.APP_EMAIL,

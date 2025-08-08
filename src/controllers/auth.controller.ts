@@ -405,3 +405,183 @@ export const resetPassword: RequestHandler = async (
     );
   }
 };
+
+// Get user profile by token
+export const getUserProfile: RequestHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      res.status(401).json(
+        error({
+          title: "Authentication Required",
+          message: "Please sign in to access this feature",
+        })
+      );
+      return;
+    }
+
+    const db: Database = await getDatabase();
+
+    // Get user profile information including created_at
+    const result = await queryWithRetry(
+      () => db.sql`
+        SELECT id, email, username, created_at, updated_at 
+        FROM users 
+        WHERE id = ${userId}
+      `
+    );
+
+    if (result.length === 0) {
+      res.status(404).json(
+        error({
+          title: "User Not Found",
+          message: "User profile not found",
+        })
+      );
+      return;
+    }
+
+    const user = result[0];
+    res.status(200).json(
+      success({
+        title: "Profile Retrieved",
+        message: "User profile retrieved successfully",
+        data: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+        },
+      })
+    );
+  } catch (err) {
+    console.error("Get user profile error:", err);
+    res.status(500).json(
+      error({
+        title: "Internal Server Error",
+        message: "Failed to retrieve user profile",
+      })
+    );
+  }
+};
+
+// Update username by token
+export const updateUsername: RequestHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    const { username: rawUsername } = req.body;
+
+    if (!userId) {
+      res.status(401).json(
+        error({
+          title: "Authentication Required",
+          message: "Please sign in to access this feature",
+        })
+      );
+      return;
+    }
+
+    // Validate username input
+    if (!rawUsername || !rawUsername.trim()) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Username is required",
+        })
+      );
+      return;
+    }
+
+    // Sanitize username input
+    const username = sanitizeInput(rawUsername.trim());
+    if (!username) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Invalid username format",
+        })
+      );
+      return;
+    }
+
+    // Validate username length (3-30 characters)
+    if (username.length < 3 || username.length > 30) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Username must be between 3 and 30 characters",
+        })
+      );
+      return;
+    }
+
+    const db: Database = await getDatabase();
+
+    // Check if username already exists (excluding current user)
+    const existingUser = await queryWithRetry(
+      () => db.sql`
+        SELECT id FROM users 
+        WHERE username = ${username} AND id != ${userId}
+      `
+    );
+
+    if (existingUser.length > 0) {
+      res.status(409).json(
+        error({
+          title: "Username Taken",
+          message: "This username is already taken",
+        })
+      );
+      return;
+    }
+
+    // Update username
+    await queryWithRetry(
+      () => db.sql`
+        UPDATE users 
+        SET username = ${username}, updated_at = datetime('now') 
+        WHERE id = ${userId}
+      `
+    );
+
+    // Get updated user information
+    const updatedUser = await queryWithRetry(
+      () => db.sql`
+        SELECT id, email, username, updated_at 
+        FROM users 
+        WHERE id = ${userId}
+      `
+    );
+
+    res.status(200).json(
+      success({
+        title: "Username Updated",
+        message: "Username updated successfully",
+        data: {
+          id: updatedUser[0].id,
+          email: updatedUser[0].email,
+          username: updatedUser[0].username,
+          updated_at: updatedUser[0].updated_at,
+        },
+      })
+    );
+  } catch (err) {
+    console.error("Update username error:", err);
+    res.status(500).json(
+      error({
+        title: "Internal Server Error",
+        message: "Failed to update username",
+      })
+    );
+  }
+};
+
+

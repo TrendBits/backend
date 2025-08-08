@@ -5,8 +5,10 @@ import {
   requestResetPassword,
   resetPassword,
   verifyRequestResetToken,
+  getUserProfile,
+  updateUsername,
 } from "../controllers/auth.controller";
-import { validateJwtToken } from "../middlewares/jwt.middleware";
+import { validateJwtToken, authenticateToken } from "../middlewares/jwt.middleware";
 
 const authRouter = Router();
 
@@ -18,5 +20,9 @@ authRouter.get("/validate", validateJwtToken);
 authRouter.post("/request-reset-password", requestResetPassword);
 authRouter.get("/verify-reset-token", verifyRequestResetToken);
 authRouter.post("/reset-password", resetPassword);
+
+// User profile endpoints protected by JWT
+authRouter.get("/profile", authenticateToken, getUserProfile);
+authRouter.put("/profile/username", authenticateToken, updateUsername);
 
 export default authRouter;
