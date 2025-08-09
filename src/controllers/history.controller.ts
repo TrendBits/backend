@@ -11,6 +11,12 @@ interface SaveTrendRequest {
   summary: string;
   key_points: string[];
   call_to_action: string;
+  article_references?: Array<{
+    title: string;
+    url: string;
+    source: string;
+    date: string;
+  }>;
 }
 
 // Interface for database records (key_points stored as JSON string)
@@ -22,6 +28,7 @@ interface TrendHistoryDbItem {
   summary: string;
   key_points: string; 
   call_to_action: string;
+  article_references: string;
   created_at: string;
   updated_at: string;
 }
@@ -35,17 +42,34 @@ interface TrendHistoryItem {
   summary: string;
   key_points: string[];
   call_to_action: string;
+  article_references: Array<{
+    title: string;
+    url: string;
+    source: string;
+    date: string;
+  }>;
   created_at: string;
   updated_at: string;
 }
 
-// Helper function for safe JSON parsing
+// Helper function for safe JSON parsing of keypoints
 const parseKeyPoints = (keyPointsJson: string): string[] => {
   try {
     const parsed = JSON.parse(keyPointsJson);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.error('Failed to parse key_points JSON:', error);
+    return [];
+  }
+};
+
+// Helper function for safe JSON parsing of article references
+const parseArticleReferences = (referencesJson: string): Array<{title: string, url: string, source: string, date: string}> => {
+  try {
+    const parsed = JSON.parse(referencesJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Failed to parse article_references JSON:', error);
     return [];
   }
 };
@@ -158,7 +182,7 @@ export const getTrends = async (
       const trendResult = await queryWithRetry(
         () => db.sql`
           SELECT id, search_term, headline, summary, key_points, 
-                 call_to_action, created_at, updated_at
+                 article_references, call_to_action, created_at, updated_at
           FROM trend_history 
           WHERE id = ${id} AND user_id = ${userId}
         `
@@ -177,6 +201,7 @@ export const getTrends = async (
       const trend: TrendHistoryItem = {
         ...trendResult[0],
         key_points: parseKeyPoints(trendResult[0].key_points),
+        article_references: parseArticleReferences(trendResult[0].article_references || '[]'),
       };
 
       res.json(
@@ -217,7 +242,7 @@ export const getTrends = async (
       const historyItems = await queryWithRetry(
         () => db.sql`
           SELECT id, search_term, headline, summary, key_points, 
-                 call_to_action, created_at, updated_at
+                 article_references, call_to_action, created_at, updated_at
           FROM trend_history 
           WHERE user_id = ${userId} 
           AND (search_term LIKE ${searchTerm} 
@@ -232,6 +257,7 @@ export const getTrends = async (
       const formattedHistory: TrendHistoryItem[] = historyItems.map(item => ({
         ...item,
         key_points: parseKeyPoints(item.key_points),
+        article_references: parseArticleReferences(item.article_references || '[]'),
       }));
 
       res.json(
@@ -286,6 +312,7 @@ export const getTrends = async (
       const formattedHistory: TrendHistoryItem[] = historyItems.map(item => ({
         ...item,
         key_points: parseKeyPoints(item.key_points),
+        article_references: parseArticleReferences(item.article_references || '[]'),
       }));
 
       res.json(
@@ -352,7 +379,7 @@ export const getTrends = async (
         const trendResult = await queryWithRetry(
           () => db.sql`
             SELECT id, search_term, headline, summary, key_points, 
-                   call_to_action, created_at, updated_at
+                   article_references, call_to_action, created_at, updated_at
             FROM trend_history 
             WHERE id = ${id} AND user_id = ${userId}
           `
@@ -371,6 +398,7 @@ export const getTrends = async (
         const trend: TrendHistoryItem = {
           ...trendResult[0],
           key_points: parseKeyPoints(trendResult[0].key_points),
+          article_references: parseArticleReferences(trendResult[0].article_references || '[]'),
         };
     
         res.json(

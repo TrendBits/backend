@@ -6,20 +6,31 @@ export const geminiSummarySchema = z.object({
   summary: z.string().min(1, "Summary is required"),
   key_points: z.array(z.string()).min(1, "At least one key point is required"),
   call_to_action: z.string().min(1, "Call to action is required"),
+  references: z.array(z.object({
+    title: z.string(),
+    url: z.string().url(),
+    source: z.string(),
+    date: z.string().optional()
+  })).optional().default([])
 });
 
 // Export a stringified JSON example for prompt injection
 export const geminiSummaryJsonExample = JSON.stringify(
   {
-    headline:
-      "A short, compelling headline that captures the essence of the trend.",
-    summary:
-      "A podcast-style spoken summary of 10–15 sentences. It should be narrative, informative, and naturally flowing. Start with a hook or intro, provide background or current context, highlight major points, and conclude smoothly.",
+    headline: "A short, compelling headline that captures the essence of the trend.",
+    summary: "A podcast-style spoken summary of 10–15 sentences. It should be narrative, informative, and naturally flowing. Start with a hook or intro, provide background or current context, highlight major points, and conclude smoothly. Do NOT include inline references like [1], [2] - all sources will be listed separately.",
     key_points: [
       "Bullet-point list of 4–6 key facts, developments, stats, or takeaways related to the trend.",
     ],
-    call_to_action:
-      "A short, friendly wrap-up that invites the listener to stay informed, take action, or check back later.",
+    call_to_action: "A short, friendly wrap-up that invites the listener to stay informed, take action, or check back later.",
+    references: [
+      {
+        title: "Example Article Title",
+        url: "https://example.com/article",
+        source: "Example News Source",
+        date: "2025-01-15"
+      }
+    ]
   },
   null,
   2
@@ -65,5 +76,6 @@ export function filterGeminiSummarySections(data: any) {
     summary: parsed.summary || "",
     key_points: Array.isArray(parsed.key_points) ? parsed.key_points : [],
     call_to_action: parsed.call_to_action || "",
+    references: Array.isArray(parsed.references) ? parsed.references : []
   };
 }

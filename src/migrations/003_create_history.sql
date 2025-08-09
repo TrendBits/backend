@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS trend_history (
     summary TEXT NOT NULL,
     key_points TEXT NOT NULL,
     call_to_action TEXT NOT NULL,
+    article_references TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

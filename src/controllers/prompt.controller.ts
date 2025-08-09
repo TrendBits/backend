@@ -34,58 +34,52 @@ export const generateSummary = async (
 
     // Use Gemini AI to generate a structured, comprehensive AI-focused summary
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const currentYear = new Date().getFullYear();
+    const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long' });
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
       contents: `
-        You are a comprehensive trend analyst and expert commentator for TrendBits, a platform specializing in global developments and trending topics across all industries and sectors.
+        You are a senior trend analyst and expert commentator for TrendBits, specializing in identifying and analyzing **the most recent and breaking trends** across all industries and sectors.
 
-        IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} (${new Date().getFullYear()}). Analyze trends that are happening RIGHT NOW in 2025.
+        IMPORTANT: Today is ${currentDate} (${currentYear}).  
+        - Prioritize developments from **the last 7 days and max of 14 days** whenever possible.  
+        - If fewer than 14 days of context exists for a trend, expand only as far back as **the last 30 days**.  
+        - Mention dates explicitly in the narrative to signal recency.  
+        - Do not rely on outdated reports or articles older than ${currentYear}.  
+        - All references must be **published within ${currentYear}**, ideally the current month ${currentMonth}.
 
-        Your task is to create a **comprehensive, detailed analysis** of the given trend or topic, formatted as an engaging **3-5 minute podcast segment**. This should be substantially more detailed than a typical summary - users want to understand the full scope and implications of what they're missing out on.
-
-        Your output must strictly follow this JSON structure:
-
-        Gemini Podcast Summary JSON Example:
+        Your task: produce a **3–5 minute podcast-style analysis** in JSON format, output must strictly follow the structure:
         ${geminiSummaryJsonExample}
 
-        **CONTENT REQUIREMENTS:**
+        **CONTENT RULES:**
+        - Summary: 200–400 words, markdown-formatted, covering:
+          ## Background Context – ONLY recent background from this year ${currentYear} (brief history if needed)
+          ## Key Details – clear explanation of the trend
+          ## Key Players – people, companies, orgs, governments, or institutions currently active in this trend
+          ## Current Impact – what is happening RIGHT NOW? How this is affecting the relevant industry, society, or global landscape in ${currentYear}
+          ## Market/Social Implications – immediate effects on businesses, economics, politics, cultures, or society today
+          ## Future Trajectory – where it’s heading in the near term
+          ## Why It Matters – importance in today’s context
 
-        📊 **Summary Field (200-400 words)**: Create a comprehensive narrative that includes:
-        - **Background Context**: What led to this development? Recent context within the relevant field (focus on 2025 developments)
-        - **Key Details**: Explain the topic, methodology, or approach in accessible terms
-        - **Key Players**: Companies, individuals, organizations, governments, or institutions involved
-        - **Current Impact**: How this is affecting the relevant industry, society, or global landscape RIGHT NOW in 2025
-        - **Market/Social Implications**: Business, economic, political, cultural, or societal effects happening today
-        - **Future Trajectory**: Where this trend is heading in 2025 and beyond, potential developments
-        - **Why It Matters**: The broader significance for society, industry, or global developments in the current context
+      - Tone: authoritative yet accessible, for informed professionals
+      - No greetings, no platform acknowledgments, no fluff
+      - All factual claims must be supported by references (in the references array ONLY, not inline)
+      - References:  
+        * Real URLs from grounded search only  
+        * All from reputable sources (BBC, Reuters, AP, official sites, etc.)  
+        * All from the last 90 days (preferably last 30)  
+        * No fabricated links  
+        * Include: title, url, source, date (YYYY-MM-DD)
 
-        🎯 **Key Points (6-8 detailed points)**: Each point should be substantial (15-25 words) covering:
-        - Specific achievements, breakthroughs, or developments from 2025
-        - Quantifiable metrics, funding amounts, performance data, statistics (current figures)
-        - Strategic partnerships, acquisitions, collaborations, or alliances (recent announcements)
-        - Competitive landscape changes or market shifts (what's happening now)
-        - Regulatory, legal, or policy implications (current legislation, recent decisions)
-        - Real-world applications, consequences, and use cases (how it's being used today)
-        - Expert opinions, public reactions, or industry responses (recent quotes, reactions)
-        - Timeline milestones and upcoming developments (2025 roadmap, near-term events)
+      - Key Points: 6–8 detailed, fact-rich bullets, all tied to **recent ${currentYear} events**
 
-        🎙️ **Tone & Style**:
-        - Write as if explaining to informed professionals who want deep insights
-        - Use appropriate terminology but explain complex concepts clearly
-        - Include concrete examples, case studies, and real-world applications from 2025
-        - Reference recent developments, specific dates from 2025, and current figures
-        - Make connections to broader trends and ecosystem developments happening now
-        - Use phrases like "as of [current month] 2025", "recently announced", "latest data shows"
-
-        ❌ **STRICT REQUIREMENTS**:
-        - Cover ANY trending topic across all fields: technology, politics, entertainment, sports, culture, health, environment, business, science, social issues, etc.
-        - Focus EXCLUSIVELY on 2025 content - NO outdated information from 2024 or earlier
-        - Include current references, recent dates, and up-to-date statistics
-        - NO brief or surface-level explanations - go deep with current context
-        - NO speculation without basis - stick to facts and informed analysis from reliable 2025 sources
-        - Output ONLY pure JSON, no markdown or explanations
-
-        **Trend/Topic to Analyze:**
+      **Strict Instructions for Recency:**
+      - Avoid general overviews that ignore the latest data/events.
+      - Include phrases like "as of ${currentMonth} ${currentYear}", "in the past week", "recently announced".
+      - Highlight concrete, timestamped developments from grounded search results.
+      - If no recent info exists, say so in the summary rather than padding with old content.
         ${prompt.trim()}
       `,
       config: {
@@ -95,38 +89,58 @@ export const generateSummary = async (
         systemInstruction: `
           You are a senior trend analyst and podcast content creator specializing in global developments, breaking news, and trending topics across all industries and sectors.
 
-          CRITICAL: Today is ${new Date().getFullYear()} and you must ONLY analyze trends and provide information from ${new Date().getFullYear()}. Absolutely NO content from 2024 or earlier years unless providing brief historical context.
+          CRITICAL: Today is ${currentYear} and you must ONLY analyze trends and provide information from ${currentYear}. Absolutely NO content from ${currentYear - 1} or earlier years unless providing brief historical context.
 
           Your expertise covers:
-          - Technology and innovation (AI, software, hardware, startups, tech policy) - focus on 2025 developments
-          - Politics and governance (elections, policy changes, international relations, legislation) - current 2025 political landscape
-          - Entertainment and media (movies, music, streaming, celebrity news, cultural phenomena) - what's trending now in 2025
-          - Sports and athletics (major events, transfers, records, controversies, business of sports) - current 2025 season/events
-          - Business and economics (market trends, corporate news, economic indicators, industry shifts) - latest 2025 market conditions
-          - Health and medicine (medical breakthroughs, public health, healthcare policy, wellness trends) - recent 2025 health developments
-          - Environment and climate (climate change, sustainability, environmental policy, green technology) - current 2025 environmental initiatives
-          - Science and research (scientific discoveries, space exploration, academic developments) - latest 2025 research
-          - Social issues and culture (social movements, demographic trends, lifestyle changes, viral phenomena) - what's happening socially in 2025
-          - Finance and markets (cryptocurrency, stock market, economic policy, financial innovation) - current 2025 financial landscape
+          - Technology and innovation (AI, software, hardware, startups, tech policy) - focus on ${currentYear} developments
+          - Politics and governance (elections, policy changes, international relations, legislation) - current ${currentYear} political landscape
+          - Entertainment and media (movies, music, streaming, celebrity news, cultural phenomena) - what's trending now in ${currentYear}
+          - Sports and athletics (major events, transfers, records, controversies, business of sports) - current ${currentYear} season/events
+          - Business and economics (market trends, corporate news, economic indicators, industry shifts) - latest ${currentYear} market conditions
+          - Health and medicine (medical breakthroughs, public health, healthcare policy, wellness trends) - recent ${currentYear} health developments
+          - Environment and climate (climate change, sustainability, environmental policy, green technology) - current ${currentYear} environmental initiatives
+          - Science and research (scientific discoveries, space exploration, academic developments) - latest ${currentYear} research
+          - Social issues and culture (social movements, demographic trends, lifestyle changes, viral phenomena) - what's happening socially in ${currentYear}
+          - Finance and markets (cryptocurrency, stock market, economic policy, financial innovation) - current ${currentYear} financial landscape
 
-          Your goal is to provide comprehensive, detailed analysis that helps users understand not just WHAT is happening, but WHY it matters, HOW it works, and WHERE it's heading - all within the current 2025 context.
+          Your goal is to provide comprehensive, detailed analysis that helps users understand not just WHAT is happening, but WHY it matters, HOW it works, and WHERE it's heading - all within the current ${currentYear} context.
 
           Always prioritize:
-          - Factual accuracy and depth with current 2025 information
+          - Factual accuracy and depth with current ${currentYear} information
           - Business, social, and strategic implications happening now
-          - Connections to broader societal and industry trends in 2025
+          - Connections to broader societal and industry trends in ${currentYear}
           - Actionable insights for professionals and informed citizens based on current developments
-          - Concrete examples and real-world applications from 2025
-          - Recent quotes, statistics, and references from credible 2025 sources
+          - Concrete examples and real-world applications from ${currentYear}
+          - Recent quotes, statistics, and references from credible ${currentYear} sources
 
           Never provide superficial coverage - users come to TrendBits for deep, expert-level analysis of current trends they can't get elsewhere.
 
           Always include current context markers like:
-          - "As of [current month] 2025"
-          - "Recent data from 2025 shows"
-          - "Latest developments in 2025 indicate"
-          - "Current industry leaders in 2025"
+          - "As of ${currentMonth} ${currentYear}"
+          - "Recent data from ${currentYear} shows"
+          - "Latest developments in ${currentYear} indicate"
+          - "Current industry leaders in ${currentYear}"
           - "Today's market conditions"
+
+          IMPORTANT: When generating the summary field, format it as proper markdown with headers (##) and structured sections to make it visually appealing and easy to read. The summary should be well-organized with clear sections rather than a plain text block.
+
+          CRITICAL FORMATTING RULES:
+          - DO NOT include any greetings, welcomes, or introductory phrases like "Welcome back to TrendBits", "Hello", or similar
+          - Start directly with the trend analysis content
+          - No platform-specific acknowledgments or greetings
+          - Focus purely on the substantive content and analysis
+          - ABSOLUTELY NO inline references, citations, or source mentions in the summary or key_points text
+          - The summary and key_points must be completely clean of any reference indicators like [1], [2], (Source: ...), etc.
+          - Write the summary as if you're speaking naturally without citing sources in the text
+          - ALL sources must ONLY appear in the "references" array field
+          - DO NOT generate fake URLs - only use real, accessible URLs that you can verify
+          - If you cannot find real URLs, leave the references array empty rather than creating fake ones
+          - Each reference (if any) must include: title, url (REAL working link), source, and date
+          - Only use reputable news sources like BBC, Reuters, CNN, Associated Press, official government sites, etc.
+          - Test URLs mentally - they should follow real website patterns (e.g., bbc.com/news/..., reuters.com/...)
+          - The summary should flow naturally as pure narrative content without any source interruptions
+
+          IMPORTANT: Write the summary as if you're telling a story or giving a presentation - no citations, no references, just pure informative content. All sources go separately in the references field.
 
           Output format: Pure JSON only, following the exact schema provided.
         `,
@@ -161,19 +175,18 @@ export const generateSummary = async (
           () => db.sql`
             INSERT INTO trend_history (
               id, user_id, search_term, headline, summary, 
-              key_points, call_to_action, created_at, updated_at
+              key_points, call_to_action, article_references, created_at, updated_at
             )
             VALUES (
               ${historyId}, ${userId}, ${prompt.trim()}, ${structured.headline}, ${structured.summary},
-              ${JSON.stringify(structured.key_points)}, ${structured.call_to_action}, ${now}, ${now}
+              ${JSON.stringify(structured.key_points)}, ${structured.call_to_action}, ${JSON.stringify(structured.references || [])}, ${now}, ${now}
             )
-          `
+          `,
         );
 
         summaryId = historyId;
         console.log(`Saved trend summary to history for user ${userId}`);
       } catch (historyError) {
-        // Log the error but don't fail the main request
         console.error("Failed to save to history:", historyError);
       }
     }
