@@ -20,7 +20,6 @@ historyRouter.get("/:id", getTrendById);
 
 // GET /history - Unified endpoint for all trend retrieval operations
 // Supports multiple query patterns:
-// - ?id=uuid - Get specific trend by ID
 // - ?q=search_term - Search trends (with optional pagination)
 // - ?page=1&limit=10 - Get paginated history
 // - ?q=search_term&page=1&limit=10 - Search with pagination

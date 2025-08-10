@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/jwt.middleware";
 import { generateSummary } from "../controllers/prompt.controller";
+import { guestOrAuthMiddleware } from "../middlewares/guest.middleware";
 
 const promptRouter = Router();
 
-promptRouter.post("/summary", authenticateToken, generateSummary);
+promptRouter.post("/summary", guestOrAuthMiddleware, generateSummary);
 
 export default promptRouter;

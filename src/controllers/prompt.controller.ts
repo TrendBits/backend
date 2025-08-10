@@ -19,8 +19,8 @@ export const generateSummary = async (
 ): Promise<void> => {
   try {
     const { prompt } = req.body as PromptRequest;
-    // Get user ID from JWT middleware
-    const userId = req.user?.user_id; 
+    const userId = req.user?.user_id;
+    const isGuest = req.guest?.is_guest || false;
 
     if (!prompt || !prompt.trim()) {
       res.status(400).json(
@@ -31,6 +31,9 @@ export const generateSummary = async (
       );
       return;
     }
+
+    // Basic input sanitization
+    const sanitizedPrompt = prompt.trim().substring(0, 1000);
 
     // Use Gemini AI to generate a structured, comprehensive AI-focused summary
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -164,51 +167,58 @@ export const generateSummary = async (
     }
 
     // Save to user's history if user is logged in
-    let summaryId = null;
-    if (userId && structured) {
-      try {
-        const db: Database = await getDatabase();
-        const historyId = uuidv7();
-        const now = new Date().toISOString();
+    let summaryId: string | null = null;
+    const savedToHistory = !!userId && !isGuest;
 
-        await queryWithRetry(
-          () => db.sql`
-            INSERT INTO trend_history (
-              id, user_id, search_term, headline, summary, 
-              key_points, call_to_action, article_references, created_at, updated_at
-            )
-            VALUES (
-              ${historyId}, ${userId}, ${prompt.trim()}, ${structured.headline}, ${structured.summary},
-              ${JSON.stringify(structured.key_points)}, ${structured.call_to_action}, ${JSON.stringify(structured.references || [])}, ${now}, ${now}
-            )
-          `,
-        );
+    // Only save to history if user is authenticated (not guest)
+    if (savedToHistory) {
+      const db: Database = await getDatabase();
+      summaryId = uuidv7();
+      const now = new Date().toISOString();
 
-        summaryId = historyId;
-        console.log(`Saved trend summary to history for user ${userId}`);
-      } catch (historyError) {
-        console.error("Failed to save to history:", historyError);
-      }
+      await queryWithRetry(
+        () => db.sql`
+          INSERT INTO trend_history (
+            id, user_id, search_term, headline, summary, 
+            key_points, call_to_action, article_references, created_at, updated_at
+          )
+          VALUES (
+            ${summaryId}, ${userId}, ${sanitizedPrompt}, ${structured.headline}, ${structured.summary},
+            ${JSON.stringify(structured.key_points)}, ${structured.call_to_action}, 
+            ${JSON.stringify(structured.references || [])}, ${now}, ${now}
+          )
+        `
+      );
     }
+
+    // Response data structure
+    const responseData = {
+      ...structured,
+      searchTerm: sanitizedPrompt,
+      saved_to_history: savedToHistory,
+      ...(savedToHistory && { summary_id: summaryId }),
+      ...(isGuest && {
+        guest_info: {
+          requests_used: req.guest?.request_count || 0,
+          requests_remaining: 2 - (req.guest?.request_count || 0),
+          requires_signup: (req.guest?.request_count || 0) >= 2
+        }
+      })
+    };
 
     res.json(
       success({
-        title: "AI Trend Summary",
-        message: "Successfully generated structured summary",
-        data: {
-          ...structured,
-          searchTerm: prompt,
-          saved_to_history: !!userId,
-          summary_id: summaryId,
-        },
+        title: "Summary Generated",
+        message: "Trend summary generated successfully",
+        data: responseData,
       })
     );
   } catch (err) {
-    console.error("Gemini AI summary error:", err);
+    console.error("Generate summary error:", err);
     res.status(500).json(
       error({
         title: "Internal Server Error",
-        message: "Failed to generate AI summary",
+        message: "Failed to generate summary"
       })
     );
   }
