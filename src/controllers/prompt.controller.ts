@@ -7,8 +7,8 @@ import {
   filterGeminiSummarySections,
   validateGeminiSummary,
 } from "../utils/gemini_summary.util";
-import { getDatabase, queryWithRetry } from "../configs/database";
-import type { Database } from "@sqlitecloud/drivers";
+import { getDatabase } from "../configs/database";
+import { trendHistory } from "../db/schema";
 import { v7 as uuidv7 } from "uuid";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -246,23 +246,23 @@ export const generateSummary = async (
 
     // Only save to history if user is authenticated (not guest)
     if (savedToHistory) {
-      const db: Database = await getDatabase();
+      const db = await getDatabase();
       summaryId = uuidv7();
-      const now = new Date().toISOString();
+      const now = new Date();
 
-      await queryWithRetry(
-        () => db.sql`
-          INSERT INTO trend_history (
-            id, user_id, search_term, headline, summary, 
-            key_points, call_to_action, article_references, created_at, updated_at
-          )
-          VALUES (
-            ${summaryId}, ${userId}, ${sanitizedPrompt}, ${structured.headline}, ${structured.summary},
-            ${JSON.stringify(structured.key_points)}, ${structured.call_to_action}, 
-            ${JSON.stringify(structured.references || [])}, ${now}, ${now}
-          )
-        `
-      );
+      await db.insert(trendHistory)
+        .values({
+          id: summaryId,
+          userId: userId,
+          searchTerm: sanitizedPrompt,
+          headline: structured.headline,
+          summary: structured.summary,
+          keyPoints: JSON.stringify(structured.key_points),
+          callToAction: structured.call_to_action,
+          articleReferences: JSON.stringify(structured.references || []),
+          createdAt: now,
+          updatedAt: now
+        });
     }
 
     // Response data structure

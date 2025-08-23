@@ -1,7 +1,9 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import { error, success } from "../utils/api_response.util";
-import { getDatabase, queryWithRetry } from "../configs/database";
+import { getDatabase } from "../configs/database";
+import { users } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 // Extend Request interface to include user data
 declare global {
@@ -122,14 +124,20 @@ export const validateJwtToken = (
         return;
       }
 
-      // Check if user email still exists in DB
+      // Check if user email still exists in DB using Drizzle ORM
       try {
         const db = await getDatabase();
-        const user = await queryWithRetry(
-          () =>
-            db.sql`SELECT id, email, password FROM users WHERE email = ${decoded.email}`
-        );
-        if (!user) {
+        const user = await db
+          .select({
+            id: users.id,
+            email: users.email,
+            password: users.password
+          })
+          .from(users)
+          .where(eq(users.email, decoded.email))
+          .limit(1);
+          
+        if (!user || user.length === 0) {
           res.status(401).json(
             error({
               title: "Authentication Failed",

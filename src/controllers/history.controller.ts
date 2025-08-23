@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { error, success } from "../utils/api_response.util";
-import { getDatabase, queryWithRetry } from "../configs/database";
-import type { Database } from "@sqlitecloud/drivers";
+import { getDatabase } from "../configs/database";
+import { trendHistory } from "../db/schema";
+import { eq, and, like, or, desc, count } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 
 // Interface for incoming requests (matches prompt controller output)
@@ -17,20 +18,6 @@ interface SaveTrendRequest {
     source: string;
     date: string;
   }>;
-}
-
-// Interface for database records (key_points stored as JSON string)
-interface TrendHistoryDbItem {
-  id: string;
-  user_id: string;
-  search_term: string;
-  headline: string;
-  summary: string;
-  key_points: string; 
-  call_to_action: string;
-  article_references: string;
-  created_at: string;
-  updated_at: string;
 }
 
 // Interface for API responses (key_points parsed back to array)
@@ -111,23 +98,23 @@ export const saveTrendSummary = async (
       return;
     }
 
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
     const historyId = uuidv7();
-    const now = new Date().toISOString();
+    const now = new Date();
 
     // Save to database (convert array to JSON string)
-    await queryWithRetry(
-      () => db.sql`
-        INSERT INTO trend_history (
-          id, user_id, search_term, headline, summary, 
-          key_points, call_to_action, created_at, updated_at
-        )
-        VALUES (
-          ${historyId}, ${userId}, ${search_term}, ${headline}, ${summary},
-          ${JSON.stringify(key_points)}, ${call_to_action}, ${now}, ${now}
-        )
-      `
-    );
+    await db.insert(trendHistory)
+      .values({
+        id: historyId,
+        userId: userId,
+        searchTerm: search_term,
+        headline: headline,
+        summary: summary,
+        keyPoints: JSON.stringify(key_points),
+        callToAction: call_to_action,
+        createdAt: now,
+        updatedAt: now
+      });
 
     res.status(201).json(
       success({
@@ -135,7 +122,7 @@ export const saveTrendSummary = async (
         message: "Successfully saved trend to your history",
         data: {
           id: historyId,
-          saved_at: now,
+          saved_at: now.toISOString(),
         },
       })
     );
@@ -175,18 +162,26 @@ export const getTrends = async (
       limit?: string;
     };
 
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Case 1: Get specific trend by ID
     if (id) {
-      const trendResult = await queryWithRetry(
-        () => db.sql`
-          SELECT id, search_term, headline, summary, key_points, 
-                 article_references, call_to_action, created_at, updated_at
-          FROM trend_history 
-          WHERE id = ${id} AND user_id = ${userId}
-        `
-      ) as TrendHistoryDbItem[];
+      const trendResult = await db.select({
+        id: trendHistory.id,
+        searchTerm: trendHistory.searchTerm,
+        headline: trendHistory.headline,
+        summary: trendHistory.summary,
+        keyPoints: trendHistory.keyPoints,
+        articleReferences: trendHistory.articleReferences,
+        callToAction: trendHistory.callToAction,
+        createdAt: trendHistory.createdAt,
+        updatedAt: trendHistory.updatedAt
+      })
+      .from(trendHistory)
+      .where(and(
+        eq(trendHistory.id, id),
+        eq(trendHistory.userId, userId)
+      ));
 
       if (trendResult.length === 0) {
         res.status(404).json(
@@ -199,9 +194,16 @@ export const getTrends = async (
       }
 
       const trend: TrendHistoryItem = {
-        ...trendResult[0],
-        key_points: parseKeyPoints(trendResult[0].key_points),
-        article_references: parseArticleReferences(trendResult[0].article_references || '[]'),
+        id: trendResult[0].id,
+        user_id: userId,
+        search_term: trendResult[0].searchTerm,
+        headline: trendResult[0].headline,
+        summary: trendResult[0].summary,
+        key_points: parseKeyPoints(trendResult[0].keyPoints),
+        call_to_action: trendResult[0].callToAction,
+        article_references: parseArticleReferences(trendResult[0].articleReferences || '[]'),
+        created_at: trendResult[0].createdAt?.toISOString() || '',
+        updated_at: trendResult[0].updatedAt?.toISOString() || ''
       };
 
       res.json(
@@ -224,40 +226,57 @@ export const getTrends = async (
       const searchTerm = `%${searchQuery.trim()}%`;
 
       // Get total count for search
-      const countResult = await queryWithRetry(
-        () => db.sql`
-          SELECT COUNT(*) as total 
-          FROM trend_history 
-          WHERE user_id = ${userId} 
-          AND (search_term LIKE ${searchTerm} 
-               OR headline LIKE ${searchTerm} 
-               OR summary LIKE ${searchTerm})
-        `
-      ) as { total: number }[];
+      const countResult = await db.select({ total: count() })
+        .from(trendHistory)
+        .where(and(
+          eq(trendHistory.userId, userId),
+          or(
+            like(trendHistory.searchTerm, searchTerm),
+            like(trendHistory.headline, searchTerm),
+            like(trendHistory.summary, searchTerm)
+          )
+        ));
 
       const totalItems = countResult[0].total;
       const totalPages = Math.ceil(totalItems / limitNum);
 
       // Get search results
-      const historyItems = await queryWithRetry(
-        () => db.sql`
-          SELECT id, search_term, headline, summary, key_points, 
-                 article_references, call_to_action, created_at, updated_at
-          FROM trend_history 
-          WHERE user_id = ${userId} 
-          AND (search_term LIKE ${searchTerm} 
-               OR headline LIKE ${searchTerm} 
-               OR summary LIKE ${searchTerm})
-          ORDER BY created_at DESC
-          LIMIT ${limitNum} OFFSET ${offset}
-        `
-      ) as TrendHistoryDbItem[];
+      const historyItems = await db.select({
+        id: trendHistory.id,
+        searchTerm: trendHistory.searchTerm,
+        headline: trendHistory.headline,
+        summary: trendHistory.summary,
+        keyPoints: trendHistory.keyPoints,
+        articleReferences: trendHistory.articleReferences,
+        callToAction: trendHistory.callToAction,
+        createdAt: trendHistory.createdAt,
+        updatedAt: trendHistory.updatedAt
+      })
+      .from(trendHistory)
+      .where(and(
+        eq(trendHistory.userId, userId),
+        or(
+          like(trendHistory.searchTerm, searchTerm),
+          like(trendHistory.headline, searchTerm),
+          like(trendHistory.summary, searchTerm)
+        )
+      ))
+      .orderBy(desc(trendHistory.createdAt))
+      .limit(limitNum)
+      .offset(offset);
 
       // Parse key_points JSON for each item
       const formattedHistory: TrendHistoryItem[] = historyItems.map(item => ({
-        ...item,
-        key_points: parseKeyPoints(item.key_points),
-        article_references: parseArticleReferences(item.article_references || '[]'),
+        id: item.id,
+        user_id: userId,
+        search_term: item.searchTerm,
+        headline: item.headline,
+        summary: item.summary,
+        key_points: parseKeyPoints(item.keyPoints),
+        call_to_action: item.callToAction,
+        article_references: parseArticleReferences(item.articleReferences || '[]'),
+        created_at: item.createdAt?.toISOString() || '',
+        updated_at: item.updatedAt?.toISOString() || ''
       }));
 
       res.json(
@@ -285,34 +304,42 @@ export const getTrends = async (
     } else {
       // Pagination mode
       // Get total count
-      const countResult = await queryWithRetry(
-        () => db.sql`
-          SELECT COUNT(*) as total 
-          FROM trend_history 
-          WHERE user_id = ${userId}
-        `
-      ) as { total: number }[];
+      const countResult = await db.select({ total: count() })
+        .from(trendHistory)
+        .where(eq(trendHistory.userId, userId));
 
       const totalItems = countResult[0].total;
       const totalPages = Math.ceil(totalItems / limitNum);
 
       // Get paginated history
-      const historyItems = await queryWithRetry(
-        () => db.sql`
-          SELECT id, search_term, headline, summary, key_points, 
-                 call_to_action, created_at, updated_at
-          FROM trend_history 
-          WHERE user_id = ${userId}
-          ORDER BY created_at DESC
-          LIMIT ${limitNum} OFFSET ${offset}
-        `
-      ) as TrendHistoryDbItem[];
+      const historyItems = await db.select({
+        id: trendHistory.id,
+        searchTerm: trendHistory.searchTerm,
+        headline: trendHistory.headline,
+        summary: trendHistory.summary,
+        keyPoints: trendHistory.keyPoints,
+        callToAction: trendHistory.callToAction,
+        createdAt: trendHistory.createdAt,
+        updatedAt: trendHistory.updatedAt
+      })
+      .from(trendHistory)
+      .where(eq(trendHistory.userId, userId))
+      .orderBy(desc(trendHistory.createdAt))
+      .limit(limitNum)
+      .offset(offset);
 
       // Parse key_points JSON for each item
       const formattedHistory: TrendHistoryItem[] = historyItems.map(item => ({
-        ...item,
-        key_points: parseKeyPoints(item.key_points),
-        article_references: parseArticleReferences(item.article_references || '[]'),
+        id: item.id,
+        user_id: userId,
+        search_term: item.searchTerm,
+        headline: item.headline,
+        summary: item.summary,
+        key_points: parseKeyPoints(item.keyPoints),
+        call_to_action: item.callToAction,
+        article_references: parseArticleReferences('[]'),
+        created_at: item.createdAt?.toISOString() || '',
+        updated_at: item.updatedAt?.toISOString() || ''
       }));
 
       res.json(
@@ -345,79 +372,94 @@ export const getTrends = async (
 };
 
 // Get specific trend by ID
-    export const getTrendById = async (
-      req: Request,
-      res: Response
-    ): Promise<void> => {
-      try {
-        const userId = req.user?.user_id;
-        
-        if (!userId) {
-          res.status(401).json(
-            error({
-              title: "Authentication Required",
-              message: "Please log in to view your history",
-            })
-          );
-          return;
-        }
+export const getTrendById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
     
-        const { id } = req.params;
-    
-        if (!id) {
-          res.status(400).json(
-            error({
-              title: "Validation Error",
-              message: "Trend ID is required",
-            })
-          );
-          return;
-        }
-    
-        const db: Database = await getDatabase();
-    
-        const trendResult = await queryWithRetry(
-          () => db.sql`
-            SELECT id, search_term, headline, summary, key_points, 
-                   article_references, call_to_action, created_at, updated_at
-            FROM trend_history 
-            WHERE id = ${id} AND user_id = ${userId}
-          `
-        ) as TrendHistoryDbItem[];
-    
-        if (trendResult.length === 0) {
-          res.status(404).json(
-            error({
-              title: "Trend Not Found",
-              message: "The requested trend was not found in your history",
-            })
-          );
-          return;
-        }
-    
-        const trend: TrendHistoryItem = {
-          ...trendResult[0],
-          key_points: parseKeyPoints(trendResult[0].key_points),
-          article_references: parseArticleReferences(trendResult[0].article_references || '[]'),
-        };
-    
-        res.json(
-          success({
-            title: "Trend Retrieved",
-            message: "Successfully retrieved trend details",
-            data: trend,
-          })
-        );
-      } catch (err) {
-        console.error("Get trend by ID error:", err);
-        res.status(500).json(
-          error({
-            title: "Internal Server Error",
-            message: "Failed to retrieve trend",
-          })
-        );
-      }
+    if (!userId) {
+      res.status(401).json(
+        error({
+          title: "Authentication Required",
+          message: "Please log in to view your history",
+        })
+      );
+      return;
+    }
+
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json(
+        error({
+          title: "Validation Error",
+          message: "Trend ID is required",
+        })
+      );
+      return;
+    }
+
+    const db = await getDatabase();
+
+    const trendResult = await db.select({
+      id: trendHistory.id,
+      searchTerm: trendHistory.searchTerm,
+      headline: trendHistory.headline,
+      summary: trendHistory.summary,
+      keyPoints: trendHistory.keyPoints,
+      articleReferences: trendHistory.articleReferences,
+      callToAction: trendHistory.callToAction,
+      createdAt: trendHistory.createdAt,
+      updatedAt: trendHistory.updatedAt
+    })
+    .from(trendHistory)
+    .where(and(
+      eq(trendHistory.id, id),
+      eq(trendHistory.userId, userId)
+    ));
+
+    if (trendResult.length === 0) {
+      res.status(404).json(
+        error({
+          title: "Trend Not Found",
+          message: "The requested trend was not found in your history",
+        })
+      );
+      return;
+    }
+
+    const trend: TrendHistoryItem = {
+      id: trendResult[0].id,
+      user_id: userId,
+      search_term: trendResult[0].searchTerm,
+      headline: trendResult[0].headline,
+      summary: trendResult[0].summary,
+      key_points: parseKeyPoints(trendResult[0].keyPoints),
+      call_to_action: trendResult[0].callToAction,
+      article_references: parseArticleReferences(trendResult[0].articleReferences || '[]'),
+      created_at: trendResult[0].createdAt?.toISOString() || '',
+      updated_at: trendResult[0].updatedAt?.toISOString() || ''
     };
+
+    res.json(
+      success({
+        title: "Trend Retrieved",
+        message: "Successfully retrieved trend details",
+        data: trend,
+      })
+    );
+  } catch (err) {
+    console.error("Get trend by ID error:", err);
+    res.status(500).json(
+      error({
+        title: "Internal Server Error",
+        message: "Failed to retrieve trend",
+      })
+    );
+  }
+};
 
 // Delete trend from history
 export const deleteTrend = async (
@@ -438,14 +480,13 @@ export const deleteTrend = async (
       return;
     }
 
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
-    await queryWithRetry(
-      () => db.sql`
-        DELETE FROM trend_history 
-        WHERE id = ${trendId} AND user_id = ${userId}
-      `
-    );
+    await db.delete(trendHistory)
+      .where(and(
+        eq(trendHistory.id, trendId),
+        eq(trendHistory.userId, userId)
+      ));
 
     res.json(
       success({
