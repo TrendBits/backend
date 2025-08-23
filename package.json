@@ -1,6 +1,5 @@
 {
   "name": "backend",
-  "packageManager": "yarn@4.9.2",
   "scripts": {
     "start": "ts-node src/server.ts",
     "dev": "nodemon",
@@ -11,7 +10,6 @@
   },
   "dependencies": {
     "@google/genai": "^1.11.0",
-    "@sqlitecloud/drivers": "^1.0.507",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.0.0",
