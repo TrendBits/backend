@@ -45,6 +45,6 @@ export function generateResetToken() {
   );
   const expiresAt = new Date(
     Date.now() + expiryMinutes * 60 * 1000
-  ).toISOString();
+  );
   return { resetToken, expiresAt };
 }

@@ -13,8 +13,9 @@ import {
   verifyPassword,
 } from "../utils/auth.util";
 import { generateAccessToken } from "../middlewares/jwt.middleware";
-import { getDatabase, queryWithRetry } from "../configs/database";
-import type { Database } from "@sqlitecloud/drivers";
+import { getDatabase } from "../configs/database";
+import { users } from "../db/schema";
+import { eq, and } from "drizzle-orm";
 import { sendRequestResetPasswordEmail } from "../utils/send_email.util";
 
 export const register: RequestHandler = async (
@@ -46,12 +47,12 @@ export const register: RequestHandler = async (
         })
       );
 
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Check if user already exists
-    const existingUser = await queryWithRetry(
-      () => db.sql`SELECT id FROM users WHERE email = ${email}`
-    );
+    const existingUser = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email));
 
     if (existingUser.length > 0) {
       res.status(400).json(
@@ -66,13 +67,21 @@ export const register: RequestHandler = async (
     // Create new user
     const userId = uuidv7();
     const hashedPassword = await hashPassword(rawPassword);
+    const now = new Date();
 
-    const newUser = await queryWithRetry(
-      () => db.sql`
-      INSERT INTO users (id, email, password, created_at, updated_at)
-      VALUES (${userId}, ${email}, ${hashedPassword}, datetime('now'), datetime('now'))
-      RETURNING id, email, created_at`
-    );
+    const newUser = await db.insert(users)
+      .values({
+        id: userId,
+        email: email,
+        password: hashedPassword,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning({
+        id: users.id,
+        email: users.email,
+        createdAt: users.createdAt
+      });
 
     res.status(201).json(
       success({
@@ -123,13 +132,17 @@ export const login: RequestHandler = async (
     }
 
     // Get database instance
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Find user by email
-    const result = await queryWithRetry(
-      () =>
-        db.sql`SELECT id, email, username, password FROM users WHERE email = ${email}`
-    );
+    const result = await db.select({
+      id: users.id,
+      email: users.email,
+      username: users.username,
+      password: users.password
+    })
+    .from(users)
+    .where(eq(users.email, email));
 
     if (result.length === 0) {
       res.status(401).json(
@@ -219,12 +232,15 @@ export const requestResetPassword: RequestHandler = async (
     }
 
     // Get database instance
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Find user by email
-    const result = await queryWithRetry(
-      () => db.sql`SELECT id, email FROM users WHERE email = ${formattedEmail}`
-    );
+    const result = await db.select({
+      id: users.id,
+      email: users.email
+    })
+    .from(users)
+    .where(eq(users.email, formattedEmail));
 
     if (result.length === 0) {
       res.status(404).json(
@@ -240,14 +256,13 @@ export const requestResetPassword: RequestHandler = async (
     const { resetToken, expiresAt } = generateResetToken();
 
     // Save reset token and expiry to user in DB
-    await queryWithRetry(
-      () =>
-        db.sql`
-        UPDATE users
-        SET reset_token = ${resetToken}, reset_token_expires = ${expiresAt}, updated_at = datetime('now')
-        WHERE id = ${result[0].id}
-      `
-    );
+    await db.update(users)
+      .set({
+        resetToken: resetToken,
+        resetTokenExpires: expiresAt,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, result[0].id));
 
     // Send reset email
     await sendRequestResetPasswordEmail(result[0].email, resetToken);
@@ -282,11 +297,14 @@ export const verifyRequestResetToken: RequestHandler = async (req, res) => {
       return;
     }
 
-    const db: Database = await getDatabase();
-    const result = (await queryWithRetry(
-      () =>
-        db.sql`SELECT email, reset_token_expires FROM users WHERE reset_token = ${token}`
-    )) as any[];
+    const db = await getDatabase();
+    const result = await db.select({
+      email: users.email,
+      resetTokenExpires: users.resetTokenExpires
+    })
+    .from(users)
+    .where(eq(users.resetToken, token));
+
     if (!result || result.length === 0) {
       res.status(400).json(
         error({
@@ -296,9 +314,10 @@ export const verifyRequestResetToken: RequestHandler = async (req, res) => {
       );
       return;
     }
-    const { email, reset_token_expires } = result[0];
+    
+    const { email, resetTokenExpires } = result[0];
     // Only check expiry since token match is handled by the query
-    if (!reset_token_expires || new Date(reset_token_expires) < new Date()) {
+    if (!resetTokenExpires || new Date(resetTokenExpires) < new Date()) {
       res.status(400).json(
         error({
           title: "Invalid or Expired Token",
@@ -307,6 +326,7 @@ export const verifyRequestResetToken: RequestHandler = async (req, res) => {
       );
       return;
     }
+    
     res.status(200).json(
       success({
         title: "Token Valid",
@@ -356,12 +376,12 @@ export const resetPassword: RequestHandler = async (
     }
 
     // Get database instance
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Find user by email
-    const result = await queryWithRetry(
-      () => db.sql`SELECT id FROM users WHERE email = ${email}`
-    );
+    const result = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email));
 
     if (result.length === 0) {
       res.status(404).json(
@@ -377,17 +397,14 @@ export const resetPassword: RequestHandler = async (
     const hashedPassword = await hashPassword(rawPassword);
 
     // Update user's password and clear reset token fields
-    await queryWithRetry(
-      () =>
-        db.sql`
-        UPDATE users
-        SET password = ${hashedPassword}, 
-            reset_token = NULL, 
-            reset_token_expires = NULL, 
-            updated_at = datetime('now')
-        WHERE id = ${result[0].id}
-      `
-    );
+    await db.update(users)
+      .set({
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpires: null,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, result[0].id));
 
     res.status(200).json(
       success({
@@ -424,16 +441,18 @@ export const getUserProfile: RequestHandler = async (
       return;
     }
 
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Get user profile information including created_at
-    const result = await queryWithRetry(
-      () => db.sql`
-        SELECT id, email, username, created_at, updated_at 
-        FROM users 
-        WHERE id = ${userId}
-      `
-    );
+    const result = await db.select({
+      id: users.id,
+      email: users.email,
+      username: users.username,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt
+    })
+    .from(users)
+    .where(eq(users.id, userId));
 
     if (result.length === 0) {
       res.status(404).json(
@@ -454,8 +473,8 @@ export const getUserProfile: RequestHandler = async (
           id: user.id,
           email: user.email,
           username: user.username,
-          created_at: user.created_at,
-          updated_at: user.updated_at,
+          created_at: user.createdAt,
+          updated_at: user.updatedAt,
         },
       })
     );
@@ -523,15 +542,15 @@ export const updateUsername: RequestHandler = async (
       return;
     }
 
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Check if username already exists (excluding current user)
-    const existingUser = await queryWithRetry(
-      () => db.sql`
-        SELECT id FROM users 
-        WHERE username = ${username} AND id != ${userId}
-      `
-    );
+    const existingUser = await db.select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.username, username),
+        eq(users.id, userId)
+      ));
 
     if (existingUser.length > 0) {
       res.status(409).json(
@@ -544,22 +563,22 @@ export const updateUsername: RequestHandler = async (
     }
 
     // Update username
-    await queryWithRetry(
-      () => db.sql`
-        UPDATE users 
-        SET username = ${username}, updated_at = datetime('now') 
-        WHERE id = ${userId}
-      `
-    );
+    await db.update(users)
+      .set({
+        username: username,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId));
 
     // Get updated user information
-    const updatedUser = await queryWithRetry(
-      () => db.sql`
-        SELECT id, email, username, updated_at 
-        FROM users 
-        WHERE id = ${userId}
-      `
-    );
+    const updatedUser = await db.select({
+      id: users.id,
+      email: users.email,
+      username: users.username,
+      updatedAt: users.updatedAt
+    })
+    .from(users)
+    .where(eq(users.id, userId));
 
     res.status(200).json(
       success({
@@ -569,7 +588,7 @@ export const updateUsername: RequestHandler = async (
           id: updatedUser[0].id,
           email: updatedUser[0].email,
           username: updatedUser[0].username,
-          updated_at: updatedUser[0].updated_at,
+          updated_at: updatedUser[0].updatedAt,
         },
       })
     );
@@ -583,5 +602,3 @@ export const updateUsername: RequestHandler = async (
     );
   }
 };
-
-

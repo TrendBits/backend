@@ -1,18 +1,17 @@
-import { Database } from "@sqlitecloud/drivers";
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from '../db/schema';
 
-let db = null;
+let db: ReturnType<typeof drizzle> | null = null;
+let pool: Pool | null = null;
 let connectionAttempts = 0;
 const MAX_RETRY_ATTEMPTS = parseInt(process.env.DB_MAX_RETRY_ATTEMPTS) || 3;
 const RETRY_DELAY = parseInt(process.env.DB_RETRY_DELAY) || 2_000;
 
 const validateEnvironment = () => {
-  if (!process.env.DATABASE_URL)
-    throw new Error("DATABASE_URL environment variable is required");
-
-  if (!process.env.DATABASE_URL.startsWith("sqlitecloud://"))
-    throw new Error(
-      "DATABASE_URL must be a valid SQLite Cloud connection string"
-    );
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
 };
 
 export const connectToDatabase = async () => {
@@ -27,10 +26,17 @@ export const connectToDatabase = async () => {
         `Attempting database connection (${connectionAttempts}/${MAX_RETRY_ATTEMPTS})...`
       );
 
-      db = new Database(process.env.DATABASE_URL);
-      await db.sql`SELECT 1`;
+      pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      });
 
-      console.log("Connected to SQLite Cloud successfully");
+      // Test connection
+      await pool.query('SELECT 1');
+      
+      db = drizzle(pool, { schema }); 
+      
+      console.log('Connected to PostgreSQL successfully');
       connectionAttempts = 0;
       return db;
     } catch (error) {
@@ -40,9 +46,9 @@ export const connectToDatabase = async () => {
       );
 
       if (connectionAttempts >= MAX_RETRY_ATTEMPTS) {
-        console.error("Max connection attempts reached. Database unavailable.");
+        console.error('Max connection attempts reached. Database unavailable.');
         throw new Error(
-          "Failed to connect to database after maximum retry attempts"
+          'Failed to connect to database after maximum retry attempts'
         );
       }
 
@@ -52,38 +58,33 @@ export const connectToDatabase = async () => {
 };
 
 export const getDatabase = async () => {
-  if (db) {
-    try {
-      await db.sql`SELECT 1`;
-      return db;
-    } catch (error) {
-      console.warn("Database connection is stale, reconnecting...");
-      db = null;
-    }
-    return connectToDatabase();
+  if (!db) {
+    await connectToDatabase();
   }
+  return db!;
 };
 
 export const queryWithRetry = async <T>(
   operation: () => Promise<T>,
   retries = MAX_RETRY_ATTEMPTS
 ): Promise<T> => {
-  let attempt = 0;
-  while (attempt <= retries) {
-    try {
-      return await operation();
-    } catch (err) {
-      if (
-        err?.errorCode === "ERR_CONNECTION_NOT_ESTABLISHED" ||
-        err?.message?.includes("Connection unavailable")
-      ) {
-        console.warn(`DB operation failed. Retrying... (${attempt + 1})`);
-        db = null;
-        await connectToDatabase(); // reconnect ro db
-        attempt++;
-      } else {
-        throw err;
-      }
+  try {
+    return await operation();
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(`Query failed, retrying... (${retries} attempts left)`);
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+      return queryWithRetry(operation, retries - 1);
     }
+    throw error;
+  }
+};
+
+// Graceful shutdown
+export const closeDatabase = async () => {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    db = null;
   }
 };

@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { error } from "../utils/api_response.util";
-import { getDatabase, queryWithRetry } from "../configs/database";
-import type { Database } from "@sqlitecloud/drivers";
+import { getDatabase } from "../configs/database";
+import { users, guestRequests } from "../db/schema";
+import { eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import crypto from "crypto";
 
@@ -55,11 +56,13 @@ export const guestOrAuthMiddleware = async (
           process.env.JWT_SECRET || "your-secret-key"
         );
         
-        // Verify user still exists in database
-        const db: Database = await getDatabase();
-        const user = await queryWithRetry(
-          () => db.sql`SELECT id FROM users WHERE id = ${decoded.user_id}`
-        );
+        // Verify user still exists in database using Drizzle ORM
+        const db = await getDatabase();
+        const user = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, decoded.user_id))
+          .limit(1);
         
         if (user.length === 0) {
           throw new Error('User not found');
@@ -78,17 +81,19 @@ export const guestOrAuthMiddleware = async (
     // Handle as guest user
     const clientIP = getRealClientIP(req);
     const ipHash = hashIP(clientIP);
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
 
     // Check existing guest requests for this IP address (which stores hashed IP)
-    const existingGuest = await queryWithRetry(
-      () => db.sql`SELECT * FROM guest_requests WHERE ip_address = ${ipHash}`
-    );
+    const existingGuest = await db
+      .select()
+      .from(guestRequests)
+      .where(eq(guestRequests.ipAddress, ipHash))
+      .limit(1);
 
     if (existingGuest.length > 0) {
       const guest = existingGuest[0];
       
-      if (guest.request_count >= MAX_GUEST_REQUESTS) {
+      if (guest.requestCount >= MAX_GUEST_REQUESTS) {
         res.status(429).json(
           error({
             title: "Request Limit Reached",
@@ -100,27 +105,34 @@ export const guestOrAuthMiddleware = async (
       }
 
       // Increment request count
-      await queryWithRetry(
-        () => db.sql`
-          UPDATE guest_requests 
-          SET request_count = request_count + 1, updated_at = datetime('now')
-          WHERE ip_address = ${ipHash}`
-      );
+      await db
+        .update(guestRequests)
+        .set({ 
+          requestCount: guest.requestCount + 1,
+          updatedAt: new Date().toISOString()
+        })
+        .where(eq(guestRequests.ipAddress, ipHash));
 
       req.guest = {
         ip_address: clientIP,
-        request_count: guest.request_count + 1,
+        request_count: guest.requestCount + 1,
         is_guest: true,
         ip_hash: ipHash
       };
     } else {
       // First request from this IP
       const guestId = uuidv7();
-      await queryWithRetry(
-        () => db.sql`
-          INSERT INTO guest_requests (id, ip_address, request_count, created_at, updated_at)
-          VALUES (${guestId}, ${ipHash}, 1, datetime('now'), datetime('now'))`
-      );
+      const now = new Date().toISOString();
+      
+      await db
+        .insert(guestRequests)
+        .values({
+          id: guestId,
+          ipAddress: ipHash,
+          requestCount: 1,
+          createdAt: now,
+          updatedAt: now
+        });
 
       req.guest = {
         ip_address: clientIP,

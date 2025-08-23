@@ -1,10 +1,11 @@
 import type { Request, Response } from "express";
 import { error, success } from "../utils/api_response.util";
 import { GoogleGenAI } from "@google/genai";
-import { getDatabase, queryWithRetry } from "../configs/database";
-import type { Database } from "@sqlitecloud/drivers";
+import { getDatabase } from "../configs/database";
 import { v7 as uuidv7 } from "uuid";
 import { parseGeminiJsonBlock } from "../utils/gemini_summary.util";
+import { hotTopics } from "../db/schema";
+import { eq, desc, lt } from "drizzle-orm";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -15,37 +16,22 @@ interface HotTopic {
   query: string;
 }
 
-interface StoredHotTopic extends HotTopic {
-  id: string;
-  batch_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
 // Get hot topics from database (for regular API calls)
 export const getHotTopics = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
     
-    // Get the latest batch of hot topics
-    const latestTopics = await queryWithRetry(
-      () => db.sql`
-        SELECT id, icon, title, description, query, batch_id, created_at
-        FROM hot_topics 
-        WHERE batch_id = (
-          SELECT batch_id 
-          FROM hot_topics 
-          ORDER BY created_at DESC 
-          LIMIT 1
-        )
-        ORDER BY created_at ASC
-      `
-    ) as StoredHotTopic[];
+    // Get the latest batch ID first
+    const latestBatch = await db
+      .select({ batchId: hotTopics.batchId })
+      .from(hotTopics)
+      .orderBy(desc(hotTopics.createdAt))
+      .limit(1);
 
-    if (latestTopics.length === 0) {
+    if (latestBatch.length === 0) {
       res.status(404).json(
         error({
           title: "No Topics Found",
@@ -54,6 +40,21 @@ export const getHotTopics = async (
       );
       return;
     }
+
+    // Get all topics from the latest batch
+    const latestTopics = await db
+      .select({
+        id: hotTopics.id,
+        icon: hotTopics.icon,
+        title: hotTopics.title,
+        description: hotTopics.description,
+        query: hotTopics.query,
+        batch_id: hotTopics.batchId,
+        created_at: hotTopics.createdAt
+      })
+      .from(hotTopics)
+      .where(eq(hotTopics.batchId, latestBatch[0].batchId))
+      .orderBy(hotTopics.createdAt);
 
     // Transform to match frontend expected format
     const topics = latestTopics.map(topic => ({
@@ -159,7 +160,7 @@ export const generateHotTopics = async (
       },
     });
 
-    let hotTopics: HotTopic[];
+    let hotTopicsData: HotTopic[];
     try {
       // Use the existing utility to clean JSON response
       const cleanedResponse = parseGeminiJsonBlock(response.text);
@@ -168,15 +169,15 @@ export const generateHotTopics = async (
         throw new Error("Failed to parse JSON response");
       }
       
-      hotTopics = cleanedResponse;
+      hotTopicsData = cleanedResponse;
       
       // Validate the response structure
-      if (!Array.isArray(hotTopics) || hotTopics.length !== 6) {
+      if (!Array.isArray(hotTopicsData) || hotTopicsData.length !== 6) {
         throw new Error("Invalid response format");
       }
       
       // Validate each topic has required fields
-      for (const topic of hotTopics) {
+      for (const topic of hotTopicsData) {
         if (!topic.icon || !topic.title || !topic.description || !topic.query) {
           throw new Error("Missing required fields in topic");
         }
@@ -193,37 +194,35 @@ export const generateHotTopics = async (
     }
 
     // Store topics in database
-    const db: Database = await getDatabase();
+    const db = await getDatabase();
     const batchId = uuidv7();
-    const now = new Date().toISOString();
+    const now = new Date();
 
     // Insert all topics with the same batch_id
-    for (const topic of hotTopics) {
-      const topicId = uuidv7();
-      await queryWithRetry(
-        () => db.sql`
-          INSERT INTO hot_topics (id, icon, title, description, query, batch_id, created_at, updated_at)
-          VALUES (${topicId}, ${topic.icon}, ${topic.title}, ${topic.description}, ${topic.query}, ${batchId}, ${now}, ${now})
-        `
-      );
-    }
+    const topicsToInsert = hotTopicsData.map(topic => ({
+      id: uuidv7(),
+      icon: topic.icon,
+      title: topic.title,
+      description: topic.description,
+      query: topic.query,
+      batchId: batchId,
+      createdAt: now,
+      updatedAt: now
+    }));
+
+    await db.insert(hotTopics).values(topicsToInsert);
 
     // Clean up old batches (keep only last 7 days)
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    await queryWithRetry(
-      () => db.sql`
-        DELETE FROM hot_topics 
-        WHERE created_at < ${sevenDaysAgo}
-      `
-    );
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    await db.delete(hotTopics).where(lt(hotTopics.createdAt, sevenDaysAgo));
 
     res.status(200).json(
       success({
         title: "Hot Topics Generated",
         message: "Successfully generated and stored latest trending topics",
         data: {
-          topics: hotTopics,
-          generatedAt: now,
+          topics: hotTopicsData,
+          generatedAt: now.toISOString(),
           batchId,
           stored: true
         },
